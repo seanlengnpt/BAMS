@@ -1,0 +1,34 @@
+package com.shopee.banking.bams.app.service.impl;
+
+import com.shopee.banking.bams.app.service.IAdminService;
+import com.shopee.banking.bams.app.service.dto.query.AdminProfileQuery;
+import com.shopee.banking.bams.app.service.dto.query.EditAdminProfileQuery;
+import com.shopee.banking.bams.common.enums.BizErrorCode;
+import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.util.Asserter;
+import com.shopee.banking.bams.domain.aggregateRoot.Admin;
+import com.shopee.banking.bams.domain.repository.IAdminRepository;
+import com.shopee.banking.bams.domain.valueObject.AdminId;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+public class AdminServiceImpl implements IAdminService {
+
+    @Autowired
+    IAdminRepository adminRepository;
+
+    @Override
+    public Admin getAdminById(AdminProfileQuery query) {
+        return adminRepository.queryById(query.getAdminId());
+    }
+
+    @Override
+    public void editAdminProfile(EditAdminProfileQuery query) {
+        Admin admin = adminRepository.queryById(query.getAdminId());
+        Asserter.assertNotNull(admin, BizErrorCode.ADMIN_NOT_FOUND_MAPPING, query.getAdminId().getId());
+
+        int updatedRows = adminRepository.updateProfile(query.getAdminId(), query.getNickname(), query.getProfilePictureUrl());
+        Asserter.assertTrue(updatedRows == 1, ParamErrorCode.INVALID_PARAM);
+    }
+}
