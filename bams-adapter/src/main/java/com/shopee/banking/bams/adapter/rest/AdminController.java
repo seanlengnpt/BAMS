@@ -48,16 +48,4 @@ public class AdminController {
         adminService.editAdminProfile(QueryBuilder.build(request));
         return Result.success();
     }
-
-//    private String extractAccessToken(HttpServletRequest httpRequest) {
-//        String authorization = httpRequest.getHeader("Authorization");
-//        Asserter.assertTrue(
-//                authorization != null && authorization.startsWith("Bearer "),
-//                AuthErrorCode.INVALID_ACCESS_TOKEN
-//        );
-//
-//        String accessToken = authorization.substring("Bearer ".length()).trim();
-//        Asserter.assertTrue(!accessToken.isEmpty(), AuthErrorCode.INVALID_ACCESS_TOKEN);
-//        return accessToken;
-//    }
 }
