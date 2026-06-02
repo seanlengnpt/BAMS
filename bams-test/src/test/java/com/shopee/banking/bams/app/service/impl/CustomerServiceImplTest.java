@@ -17,6 +17,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -42,6 +45,7 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -209,6 +213,53 @@ class CustomerServiceImplTest {
         assertEquals(List.of(500, 1), customerBatchCaptor.getAllValues().stream().map(List::size).toList());
         verify(transactionManager).rollback(transactionStatus);
         verify(transactionManager, never()).commit(any());
+    }
+
+    @Test
+    @DisplayName("viewCustomerProfile returns customer details when accNo is valid")
+    void viewCustomerProfile_validAccNo_returnsCustomer() {
+        Customer customer = buildCustomer("1000000001", "Alice Tan", Gender.F, START_DATE, END_DATE);
+        when(customerRepository.getCustomerByAccNo("1000000001")).thenReturn(customer);
+
+        Customer result = customerService.viewCustomerProfile("1000000001");
+
+        assertSame(customer, result);
+        verify(customerRepository).getCustomerByAccNo("1000000001");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "123456789", "12345678901", "12345abcde"})
+    @DisplayName("viewCustomerProfile rejects invalid accNo")
+    void viewCustomerProfile_invalidAccNo_fails(String accNo) {
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> customerService.viewCustomerProfile(accNo)
+        );
+
+        if (accNo == null) {
+            assertInstanceOf(ParamException.class, exception);
+            assertEquals(ParamErrorCode.NULL_PARAM, ((ParamException) exception).getErrorType());
+        } else {
+            assertInstanceOf(ParamException.class, exception);
+            assertEquals(ParamErrorCode.INVALID_PARAM, ((ParamException) exception).getErrorType());
+        }
+        verifyNoInteractions(customerRepository);
+    }
+
+    @Test
+    @DisplayName("viewCustomerProfile fails when customer does not exist")
+    void viewCustomerProfile_customerNotFound_fails() {
+        when(customerRepository.getCustomerByAccNo("1000000001")).thenReturn(null);
+
+        BizException exception = assertThrows(
+                BizException.class,
+                () -> customerService.viewCustomerProfile("1000000001")
+        );
+
+        assertEquals(BizErrorCode.CUSTOMER_NOT_FOUND_MAPPING, exception.getErrorType());
+        assertTrue(exception.getMessage().contains("1000000001"));
+        verify(customerRepository).getCustomerByAccNo("1000000001");
     }
 
     @Test

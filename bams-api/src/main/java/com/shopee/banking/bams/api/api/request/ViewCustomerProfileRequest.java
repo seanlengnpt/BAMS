@@ -1,12 +1,13 @@
 package com.shopee.banking.bams.api.api.request;
 
-import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 
 @Getter
 public class ViewCustomerProfileRequest extends BaseAppRequest{
 
-    @Size(min=10, max=10)
+    @NotBlank(message = "Account number is required")
+    @Pattern(regexp = "^\\d{10}$", message = "Account number must be exactly 10 digits")
     String accNo;
 }

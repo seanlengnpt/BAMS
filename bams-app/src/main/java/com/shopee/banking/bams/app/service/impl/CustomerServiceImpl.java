@@ -31,6 +31,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 @Component
 public class CustomerServiceImpl implements ICustomerService {
@@ -46,6 +47,7 @@ public class CustomerServiceImpl implements ICustomerService {
     private static final int MAX_CSV_ROWS = 10000;
     private static final int MAX_EXPORT_ROWS = 10000;
     private static final int BATCH_SIZE = 500;
+    private static final Pattern ACCOUNT_NUMBER_PATTERN = Pattern.compile("\\d{10}");
     private static final String INVALID_HEADER_ERROR = "Invalid CSV header.";
     private static final String INVALID_ACCOUNT_NUMBER_ERROR = "Invalid account number.";
     private static final String INVALID_NAME_ERROR = "Invalid name.";
@@ -92,6 +94,7 @@ public class CustomerServiceImpl implements ICustomerService {
     @Override
     public Customer viewCustomerProfile(String accNo) {
         Asserter.assertNotNull(accNo, ParamErrorCode.NULL_PARAM, "AccNo");
+        Asserter.assertTrue(ACCOUNT_NUMBER_PATTERN.matcher(accNo).matches(), ParamErrorCode.INVALID_PARAM, "accNo");
         Customer customer =  customerRepository.getCustomerByAccNo(accNo);
         Asserter.assertNotNull(customer, BizErrorCode.CUSTOMER_NOT_FOUND_MAPPING, accNo);
         return customer;

@@ -16,6 +16,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -30,6 +33,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -58,6 +62,57 @@ class CustomerRepositoryImplTest {
         ReflectionTestUtils.setField(customerRepository, "customerMapper", customerMapper);
         ReflectionTestUtils.setField(customerRepository, "customerDataConverter", new CustomerDataConverter());
         ReflectionTestUtils.setField(customerRepository, "customerShardRouter", CUSTOMER_SHARD_ROUTER);
+    }
+
+    @Test
+    @DisplayName("getCustomerByAccNo returns customer details for valid accNo")
+    void getCustomerByAccNo_validAccNo_returnsCustomer() {
+        String accNo = "1000000001";
+        CustomerDO customerDO = buildCustomerDO(accNo, START_DATE);
+        customerDO.setId(1L);
+        when(customerMapper.selectCustomerByAccNo(accNo, CUSTOMER_SHARD_ROUTER.getTableName(accNo)))
+                .thenReturn(customerDO);
+
+        Customer customer = customerRepository.getCustomerByAccNo(accNo);
+
+        assertEquals(1L, customer.getId());
+        assertEquals(accNo, customer.getAccountNumber());
+        assertEquals("Name " + accNo, customer.getName());
+        assertEquals(Gender.M, customer.getGender());
+        assertEquals(START_DATE, customer.getCreatedAt());
+        assertEquals(START_DATE.plusHours(1), customer.getModifiedAt());
+        verify(customerMapper).selectCustomerByAccNo(accNo, CUSTOMER_SHARD_ROUTER.getTableName(accNo));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "123456789", "12345678901", "12345abcde"})
+    @DisplayName("getCustomerByAccNo fails when accNo is invalid")
+    void getCustomerByAccNo_invalidAccNo_fails(String accNo) {
+        ParamException exception = assertThrows(
+                ParamException.class,
+                () -> customerRepository.getCustomerByAccNo(accNo)
+        );
+
+        if (accNo == null) {
+            assertEquals(ParamErrorCode.NULL_PARAM, exception.getErrorType());
+        } else {
+            assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
+        }
+        verifyNoInteractions(customerMapper);
+    }
+
+    @Test
+    @DisplayName("getCustomerByAccNo returns null when customer profile is not found")
+    void getCustomerByAccNo_customerNotFound_returnsNull() {
+        String accNo = "1000000001";
+        when(customerMapper.selectCustomerByAccNo(accNo, CUSTOMER_SHARD_ROUTER.getTableName(accNo)))
+                .thenReturn(null);
+
+        Customer customer = customerRepository.getCustomerByAccNo(accNo);
+
+        assertNull(customer);
+        verify(customerMapper).selectCustomerByAccNo(accNo, CUSTOMER_SHARD_ROUTER.getTableName(accNo));
     }
 
     @Test

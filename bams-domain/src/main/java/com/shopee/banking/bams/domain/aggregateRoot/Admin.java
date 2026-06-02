@@ -1,9 +1,5 @@
 package com.shopee.banking.bams.domain.aggregateRoot;
 
-import com.shopee.banking.bams.domain.valueObject.AdminId;
-import com.shopee.banking.bams.domain.valueObject.AdminNickname;
-import com.shopee.banking.bams.domain.valueObject.AdminProfilePictureUrl;
-import com.shopee.banking.bams.domain.valueObject.HashedPassword;
 import lombok.Getter;
 
 @Getter

@@ -50,6 +50,7 @@ public class ResponseAssembler {
         response.setId(customer.getId());
         response.setAccountNumber(customer.getAccountNumber());
         response.setCreatedAt(customer.getCreatedAt());
+        response.setModifiedAt(customer.getModifiedAt());
         return response;
     }
 

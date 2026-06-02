@@ -2,16 +2,25 @@ package com.shopee.banking.bams.adapter.rest;
 
 import com.shopee.banking.bams.api.api.request.CreateCustomersByCsvRequest;
 import com.shopee.banking.bams.api.api.request.ExportCSVByDatesRequest;
+import com.shopee.banking.bams.api.api.request.ViewCustomerProfileRequest;
 import com.shopee.banking.bams.api.api.response.CreateCustomersByCsvResponse;
+import com.shopee.banking.bams.api.api.response.ViewCustomerProfileResponse;
+import com.shopee.banking.bams.common.exception.BizException;
 import com.shopee.banking.bams.app.service.ICustomerService;
 import com.shopee.banking.bams.app.service.dto.CreateCustomerByCsvResult;
 import com.shopee.banking.bams.common.exception.ParamException;
+import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.enums.Gender;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
+import com.shopee.banking.bams.domain.aggregateRoot.Customer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -69,6 +78,67 @@ class CustomerControllerTest {
 
         assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
         verify(customerService, never()).createCustomerByCSV(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    @DisplayName("viewCustomerProfile returns customer profile details for valid accNo")
+    void viewCustomerProfile_validAccNo_succeeds() {
+        ViewCustomerProfileRequest request = buildViewCustomerProfileRequest("1000000001");
+        LocalDateTime createdAt = LocalDateTime.of(2020, 5, 1, 8, 30);
+        LocalDateTime modifiedAt = LocalDateTime.of(2020, 5, 2, 9, 45);
+        Customer customer = Customer.builder()
+                .id(1L)
+                .accountNumber("1000000001")
+                .name("Alice Tan")
+                .gender(Gender.F)
+                .createdAt(createdAt)
+                .modifiedAt(modifiedAt)
+                .build();
+        when(customerService.viewCustomerProfile("1000000001")).thenReturn(customer);
+
+        Result<ViewCustomerProfileResponse> result = customerController.viewCustomerProfile(request);
+
+        assertEquals(Result.SUCCESS_CODE, result.getCode());
+        assertEquals(Result.SUCCESS_MSG, result.getMsg());
+        assertEquals(1L, result.getData().getId());
+        assertEquals("1000000001", result.getData().getAccountNumber());
+        assertEquals("Alice Tan", result.getData().getName());
+        assertEquals(Gender.F, result.getData().getGender());
+        assertEquals(createdAt, result.getData().getCreatedAt());
+        assertEquals(modifiedAt, result.getData().getModifiedAt());
+        verify(customerService).viewCustomerProfile("1000000001");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "123456789", "12345678901", "12345abcde"})
+    @DisplayName("viewCustomerProfile fails when accNo is invalid")
+    void viewCustomerProfile_invalidAccNo_fails(String accNo) {
+        ViewCustomerProfileRequest request = buildViewCustomerProfileRequest(accNo);
+
+        ParamException exception = assertThrows(
+                ParamException.class,
+                () -> customerController.viewCustomerProfile(request)
+        );
+
+        assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
+        verify(customerService, never()).viewCustomerProfile(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("viewCustomerProfile propagates customer not found error")
+    void viewCustomerProfile_customerNotFound_fails() {
+        ViewCustomerProfileRequest request = buildViewCustomerProfileRequest("1000000001");
+        when(customerService.viewCustomerProfile("1000000001"))
+                .thenThrow(new BizException(BizErrorCode.CUSTOMER_NOT_FOUND_MAPPING, "1000000001"));
+
+        BizException exception = assertThrows(
+                BizException.class,
+                () -> customerController.viewCustomerProfile(request)
+        );
+
+        assertEquals(BizErrorCode.CUSTOMER_NOT_FOUND_MAPPING, exception.getErrorType());
+        verify(customerService).viewCustomerProfile("1000000001");
     }
 
     @Test
@@ -134,6 +204,12 @@ class CustomerControllerTest {
     private CreateCustomersByCsvRequest buildCreateCustomersByCsvRequest(String csvFilePath) {
         CreateCustomersByCsvRequest request = new CreateCustomersByCsvRequest();
         ReflectionTestUtils.setField(request, "csvFilePath", csvFilePath);
+        return request;
+    }
+
+    private ViewCustomerProfileRequest buildViewCustomerProfileRequest(String accNo) {
+        ViewCustomerProfileRequest request = new ViewCustomerProfileRequest();
+        ReflectionTestUtils.setField(request, "accNo", accNo);
         return request;
     }
 

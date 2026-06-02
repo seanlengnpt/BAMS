@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Repository
@@ -31,6 +32,7 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
     private static final int CUSTOMER_SHARD_COUNT = 10;
     private static final String CUSTOMER_SHARD_TABLE_PREFIX = "customers_";
     private static final int SHARD_FETCH_SIZE = 1000;
+    private static final Pattern ACCOUNT_NUMBER_PATTERN = Pattern.compile("\\d{10}");
 
     @Autowired
     private CustomerMapper customerMapper;
@@ -45,9 +47,12 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
     @Override
     public Customer getCustomerByAccNo(String accNo) {
         Asserter.assertNotNull(accNo, ParamErrorCode.NULL_PARAM, "accNo");
+        Asserter.assertTrue(ACCOUNT_NUMBER_PATTERN.matcher(accNo).matches(), ParamErrorCode.INVALID_PARAM, "accNo");
         try{
             CustomerDO customerDO = customerMapper.selectCustomerByAccNo(accNo, customerShardRouter.getTableName(accNo));
             return customerDataConverter.toEntity(customerDO);
+        } catch (BaseException e) {
+            throw e;
         }catch (Throwable e) {
             throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, accNo);
         }
