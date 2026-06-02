@@ -8,7 +8,6 @@ import com.shopee.banking.bams.common.ParamException;
 import com.shopee.banking.bams.common.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

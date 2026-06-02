@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -30,6 +31,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.function.Consumer;
 
 @Component
 public class CustomerServiceImpl implements ICustomerService {
@@ -99,11 +101,6 @@ public class CustomerServiceImpl implements ICustomerService {
     public String exportCustomersByDates(LocalDateTime startDate, LocalDateTime endDate) {
         Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, "startDate");
         Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, "endDate");
-        List<Customer> customers = customerRepository.selectCustomersByDates(startDate, endDate, MAX_EXPORT_ROWS);
-        return writeCustomersToCsv(customers);
-    }
-
-    private String writeCustomersToCsv(List<Customer> customers) {
         String directoryPath = "file-storage/exports";
         String fileName = "customers_" + LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".csv";
@@ -119,20 +116,27 @@ public class CustomerServiceImpl implements ICustomerService {
         }
 
         try (BufferedWriter writer = Files.newBufferedWriter(filePath)) {
+            DateTimeFormatter csvDateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
             writer.write("account_number,name,gender,created_at,modified_at");
             writer.newLine();
 
-            for (Customer customer : customers) {
-                writer.write(String.join(",",
-                        customer.getAccountNumber(),
-                        customer.getName(),
-                        customer.getGender().name(),
-                        customer.getCreatedAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
-                        customer.getModifiedAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                ));
-                writer.newLine();
-            }
-        } catch (IOException ex) {
+            Consumer<Customer> consumer = customer -> {
+                try {
+                    writer.write(String.join(",",
+                            customer.getAccountNumber(),
+                            customer.getName(),
+                            customer.getGender().name(),
+                            customer.getCreatedAt().format(csvDateFormatter),
+                            customer.getModifiedAt().format(csvDateFormatter)
+                    ));
+                    writer.newLine();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            };
+
+            customerRepository.selectCustomersByDates(startDate, endDate, MAX_EXPORT_ROWS, consumer);
+        } catch (IOException | UncheckedIOException ex) {
             throw new DependencyException(
                     DependencyErrorCode.EXPORT_CSV_FAILED,
                     "Unknown I/O Exception."

@@ -1,6 +1,7 @@
 package com.shopee.banking.bams.infra.dal.repository.impl;
 
 import com.shopee.banking.bams.common.DependencyException;
+import com.shopee.banking.bams.common.enums.BizErrorCode;
 import com.shopee.banking.bams.common.enums.DependencyErrorCode;
 import com.shopee.banking.bams.common.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
@@ -13,6 +14,7 @@ import com.shopee.banking.bams.infra.dal.sharding.CustomerShardRouter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
+import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -20,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Repository
@@ -50,11 +53,12 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
     }
 
     @Override
-    public List<Customer> selectCustomersByDates(LocalDateTime startDate, LocalDateTime endDate, int numRows) {
+    public void selectCustomersByDates(LocalDateTime startDate, LocalDateTime endDate, int numRows, Consumer<Customer> consumer) {
         Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, "startDate");
         Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, "endDate");
         Asserter.assertTrue(!startDate.isAfter(endDate), ParamErrorCode.INVALID_PARAM, "startDate, endDate");
         Asserter.assertTrue(numRows > 0, ParamErrorCode.INVALID_PARAM, "numRows");
+        Asserter.assertNotNull(consumer, ParamErrorCode.NULL_PARAM, "consumer");
         try{
             List<List<Customer>> shardCustomerLists = new ArrayList<>(CUSTOMER_SHARD_COUNT);
             for (int shardIndex = 0; shardIndex < CUSTOMER_SHARD_COUNT; shardIndex++) {
@@ -65,8 +69,15 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
                         0
                 ));
             }
-            return mergeSortedCustomerLists(shardCustomerLists, startDate, endDate, numRows);
-        }catch(Throwable e){
+            Asserter.assertTrue(
+                    shardCustomerLists.stream().anyMatch(shardCustomers -> !shardCustomers.isEmpty()),
+                    BizErrorCode.CUSTOMERS_NOT_FOUND_EXPORT,
+                    "createdAt between " + startDate + " and " + endDate
+            );
+            mergeSortedCustomerLists(shardCustomerLists, startDate, endDate, numRows, consumer);
+        } catch (UncheckedIOException e) {
+            throw e;
+        } catch(Throwable e){
             throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, "Select customers by " + startDate + " , " + endDate);
         }
     }
@@ -102,7 +113,7 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
                                                   LocalDateTime startDate,
                                                   LocalDateTime endDate,
                                                   int offset) {
-        List<CustomerDO> customerDOs = customerMapper.selectCustomersByDates(tableName, startDate, endDate, offset);
+        List<CustomerDO> customerDOs = customerMapper.selectCustomersByDates(tableName, startDate, endDate, SHARD_FETCH_SIZE, offset);
         List<Customer> customers = new ArrayList<>(customerDOs.size());
         for (CustomerDO customerDO : customerDOs) {
             customers.add(customerDataConverter.toEntity(customerDO));
@@ -110,15 +121,16 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
         return customers;
     }
 
-    private List<Customer> mergeSortedCustomerLists(List<List<Customer>> shardCustomerLists,
-                                                    LocalDateTime startDate,
-                                                    LocalDateTime endDate,
-                                                    int maxCustomers) {
-        List<Customer> result = new ArrayList<>(Math.min(maxCustomers, SHARD_FETCH_SIZE));
+    private void mergeSortedCustomerLists(List<List<Customer>> shardCustomerLists,
+                                          LocalDateTime startDate,
+                                          LocalDateTime endDate,
+                                          int maxCustomers,
+                                          Consumer<Customer> consumer) {
         PriorityQueue<CustomerCursor> minHeap = new PriorityQueue<>(
                 Comparator.comparing(cursor -> cursor.customer().getCreatedAt())
         );
         int[] shardOffsets = new int[shardCustomerLists.size()];
+        int rowCount = 0;
 
         for (int shardIndex = 0; shardIndex < shardCustomerLists.size(); shardIndex++) {
             List<Customer> shardCustomers = shardCustomerLists.get(shardIndex);
@@ -128,12 +140,10 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
             }
         }
 
-        while (!minHeap.isEmpty() && result.size() < maxCustomers) {
+        while (!minHeap.isEmpty() && rowCount < maxCustomers) {
             CustomerCursor earliest = minHeap.poll();
-            result.add(earliest.customer());
-            if (result.size() >= maxCustomers) {
-                break;
-            }
+            consumer.accept(earliest.customer());
+            rowCount++;
 
             int nextCustomerIndex = earliest.customerIndex() + 1;
             List<Customer> shardCustomers = shardCustomerLists.get(earliest.shardIndex());
@@ -158,8 +168,6 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
                 }
             }
         }
-
-        return result;
     }
 
     private String getShardTableName(int shardIndex) {

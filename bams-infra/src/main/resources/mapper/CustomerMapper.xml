@@ -40,16 +40,8 @@
         FROM ${tableName}
         WHERE created_at BETWEEN #{startDate} AND #{endDate}
         ORDER BY created_at ASC
-        LIMIT 1000 OFFSET #{offset}
+        LIMIT #{shardFetchSize} OFFSET #{offset}
     </select>
-
-    <insert id="batchInsert">
-        INSERT INTO customers (account_number, name, gender, created_at, modified_at)
-        VALUES
-        <foreach collection="customers" item="customer" separator=",">
-            (#{customer.accountNumber}, #{customer.name}, #{customer.gender}, NOW(), NOW())
-        </foreach>
-    </insert>
 
     <insert id="batchUpsert">
         INSERT INTO ${tableName} (account_number, name, gender, created_at, modified_at)
@@ -62,32 +54,5 @@
         gender = VALUES(gender),
         modified_at = NOW()
     </insert>
-
-    <update id="batchUpdate" parameterType="java.util.List">
-        UPDATE customers
-        <set>
-            name = CASE account_number
-            <foreach collection="customers" item="customer">
-                <if test="customer.name != null">
-                    WHEN #{customer.accountNumber} THEN #{customer.name}
-                </if>
-            </foreach>
-            ELSE name
-            END,
-            gender = CASE account_number
-            <foreach collection="customers" item="customer">
-                <if test="customer.gender != null">
-                    WHEN #{customer.accountNumber} THEN #{customer.gender}
-                </if>
-            </foreach>
-            ELSE gender
-            END,
-            modified_at = NOW()
-        </set>
-        WHERE account_number IN
-        <foreach collection="customers" item="customer" open="(" separator="," close=")">
-            #{customer.accountNumber}
-        </foreach>
-    </update>
 
 </mapper>
