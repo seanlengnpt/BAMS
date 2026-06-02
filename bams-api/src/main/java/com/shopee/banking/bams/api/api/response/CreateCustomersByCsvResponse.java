@@ -4,19 +4,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 @Getter
 @Setter
 @NoArgsConstructor
 public class CreateCustomersByCsvResponse {
-    private int createdCount;
     private int modifiedCount;
-    private List<String> errors;
 
-    public CreateCustomersByCsvResponse(int createdCount, int modifiedCount, List<String> errors) {
-        this.createdCount = createdCount;
+    public CreateCustomersByCsvResponse(int modifiedCount) {
         this.modifiedCount = modifiedCount;
-        this.errors = errors;
     }
 }

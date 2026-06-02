@@ -50,6 +50,18 @@
         </foreach>
     </insert>
 
+    <insert id="batchUpsert">
+        INSERT INTO ${tableName} (account_number, name, gender, created_at, modified_at)
+        VALUES
+        <foreach collection="customers" item="customer" separator=",">
+            (#{customer.accountNumber}, #{customer.name}, #{customer.gender}, NOW(), NOW())
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+        name = VALUES(name),
+        gender = VALUES(gender),
+        modified_at = NOW()
+    </insert>
+
     <update id="batchUpdate" parameterType="java.util.List">
         UPDATE customers
         <set>

@@ -14,11 +14,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.stream.Collectors;
 
 @Repository
 public class CustomerRepositoryImpl implements ICustomerRepository {
+    private static final int CUSTOMER_SHARD_COUNT = 10;
+    private static final String CUSTOMER_SHARD_TABLE_PREFIX = "customers_";
+
     @Autowired
     private CustomerMapper customerMapper;
 
@@ -28,19 +36,6 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
     @Autowired
     private CustomerShardRouter customerShardRouter;
 
-    @Override
-    public List<String> findExistingAccountNumbers(Collection<String> accountNumbers) {
-        Asserter.assertNotNull(accountNumbers, ParamErrorCode.NULL_PARAM, "Account numbers");
-        if (accountNumbers.isEmpty()) {
-            return List.of();
-        }
-        try {
-            return customerMapper.selectExistingAccountNumbers(accountNumbers);
-        } catch (Throwable e) {
-            System.out.println(e.getMessage());
-            throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, accountNumbers);
-        }
-    }
 
     @Override
     public Customer getCustomerByAccNo(String accNo) {
@@ -54,51 +49,88 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
     }
 
 
-    @Override
-    public List<Customer> selectCustomersByDates(String tableName, LocalDateTime startDate, LocalDateTime endDate) {
+    public List<Customer> selectCustomersByDates(LocalDateTime startDate, LocalDateTime endDate) {
         Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, startDate);
         Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, endDate);
         try{
-            List<CustomerDO> customerDOs = customerMapper.selectCustomersByDates(tableName,startDate, endDate);
-            return customerDOs.stream().map(customerDO -> customerDataConverter.toEntity(customerDO)).toList();
+            List<List<Customer>> shardCustomerLists = new ArrayList<>(CUSTOMER_SHARD_COUNT);
+            for (int shardIndex = 0; shardIndex < CUSTOMER_SHARD_COUNT; shardIndex++) {
+                String tableName = CUSTOMER_SHARD_TABLE_PREFIX + shardIndex;
+                List<CustomerDO> customerDOs = customerMapper.selectCustomersByDates(tableName, startDate, endDate);
+                List<Customer> customers = customerDOs.stream()
+                        .map(customerDataConverter::toEntity)
+                        .toList();
+                shardCustomerLists.add(customers);
+            }
+            return mergeSortedCustomerLists(shardCustomerLists);
         }catch(Throwable e){
-            System.out.println(e.getMessage());
             throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, "Select customers by " + startDate + " , " + endDate);
         }
     }
 
+
     @Override
-    public int batchInsert(List<Customer> customers) {
+    public int batchUpsert(List<Customer> customers) {
         Asserter.assertNotNull(customers, ParamErrorCode.NULL_PARAM, "Customers");
         if (customers.isEmpty()) {
             return 0;
         }
-        List<CustomerDO> customerDOs = customers.stream()
-                .map(customerDataConverter::toDataObject)
-                .toList();
-        try {
-            return customerMapper.batchInsert(customerDOs);
-        } catch (Throwable e) {
-            throw new DependencyException(DependencyErrorCode.DATABASE_INSERT_FAILED, customers);
-        }
-    }
 
-    @Override
-    public int batchUpdate(List<Customer> customers) {
-        Asserter.assertNotNull(customers, ParamErrorCode.NULL_PARAM, "Customers");
-        if (customers.isEmpty()){
-            return 0;
-        }
-        List<CustomerDO> customerDOs = customers.stream()
+        Map<String, List<CustomerDO>> customersByTable = customers.stream()
                 .map(customerDataConverter::toDataObject)
-                .toList();
+                .collect(Collectors.groupingBy(
+                        customerDO -> customerShardRouter.getTableName(customerDO.getAccountNumber()),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
         try {
-            return customerMapper.batchUpdate(customerDOs);
+            int modifiedCount = 0;
+            for (Map.Entry<String, List<CustomerDO>> entry : customersByTable.entrySet()) {
+                modifiedCount += customerMapper.batchUpsert(entry.getKey(), entry.getValue());
+            }
+            return modifiedCount;
         } catch (Throwable e) {
-            System.out.println(e.getMessage());
             throw new DependencyException(DependencyErrorCode.DATABASE_UPDATE_FAILED, customers);
         }
     }
 
+    private List<Customer> mergeSortedCustomerLists(List<List<Customer>> shardCustomerLists) {
+        List<Customer> result = new ArrayList<>();
+        PriorityQueue<CustomerCursor> minHeap = new PriorityQueue<>(
+                Comparator.comparing(cursor -> cursor.customer().getCreatedAt())
+        );
+
+        for (int shardIndex = 0; shardIndex < shardCustomerLists.size(); shardIndex++) {
+            List<Customer> shardCustomers = shardCustomerLists.get(shardIndex);
+            if (!shardCustomers.isEmpty()) {
+                minHeap.offer(new CustomerCursor(shardCustomers.get(0), shardIndex, 0));
+            }
+        }
+
+        while (!minHeap.isEmpty()) {
+            CustomerCursor earliest = minHeap.poll();
+            result.add(earliest.customer());
+
+            int nextCustomerIndex = earliest.customerIndex() + 1;
+            List<Customer> shardCustomers = shardCustomerLists.get(earliest.shardIndex());
+            if (nextCustomerIndex < shardCustomers.size()) {
+                minHeap.offer(new CustomerCursor(
+                        shardCustomers.get(nextCustomerIndex),
+                        earliest.shardIndex(),
+                        nextCustomerIndex
+                ));
+            }
+        }
+
+        return result;
+    }
+
+    private record CustomerCursor(
+            Customer customer,
+            int shardIndex,
+            int customerIndex
+    ) {
+    }
 
 }

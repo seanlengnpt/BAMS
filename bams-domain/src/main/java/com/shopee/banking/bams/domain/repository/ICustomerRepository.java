@@ -7,9 +7,7 @@ import java.util.Collection;
 import java.util.List;
 
 public interface ICustomerRepository {
-    List<String> findExistingAccountNumbers(Collection<String> accountNumbers);
     Customer getCustomerByAccNo(String accNo);
-    List<Customer> selectCustomersByDates(String tableName, LocalDateTime startDate, LocalDateTime endDate);
-    int batchInsert(List<Customer> customers);
-    int batchUpdate(List<Customer> customers);
+    List<Customer> selectCustomersByDates(LocalDateTime startDate, LocalDateTime endDate);
+    int batchUpsert(List<Customer> customers);
 }

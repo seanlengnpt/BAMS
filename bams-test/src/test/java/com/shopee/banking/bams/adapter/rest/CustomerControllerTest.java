@@ -14,8 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,17 +33,16 @@ class CustomerControllerTest {
     }
 
     @Test
-    @DisplayName("createCustomersByCsv maps request to query and returns created count")
+    @DisplayName("createCustomersByCsv maps request and returns modified count")
     void createCustomersByCsv_validRequest_succeeds() {
         CreateCustomersByCsvRequest request = buildCreateCustomersByCsvRequest(CSV_FILE_PATH);
-        customerService.result = new CreateCustomerByCsvResult(10, 3, List.of());
+        customerService.result = new CreateCustomerByCsvResult(3);
 
         Result<CreateCustomersByCsvResponse> result = customerController.createCustomersByCsv(request);
 
         assertEquals(Result.SUCCESS_CODE, result.getCode());
         assertEquals(Result.SUCCESS_MSG, result.getMsg());
-        assertEquals(10, result.getData().getCreatedCount());
-        assertEquals(List.of(), result.getData().getErrors());
+        assertEquals(3, result.getData().getModifiedCount());
     }
 
     @Test

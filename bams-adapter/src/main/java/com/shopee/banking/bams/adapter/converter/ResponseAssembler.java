@@ -58,7 +58,7 @@ public class ResponseAssembler {
         if (result == null){
             return null;
         }
-        return new CreateCustomersByCsvResponse(result.getCreatedCount(), result.getModifiedCount(), result.getErrors());
+        return new CreateCustomersByCsvResponse(result.getModifiedCount());
     }
 
 }

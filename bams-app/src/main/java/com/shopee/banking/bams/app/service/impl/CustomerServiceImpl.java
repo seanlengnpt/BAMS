@@ -11,7 +11,7 @@ import com.shopee.banking.bams.common.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
 import com.shopee.banking.bams.domain.enums.CustomerGender;
-import com.shopee.banking.bams.domain.repository.ICustomerRepository;
+import com.shopee.banking.bams.infra.dal.repository.impl.CustomerRepositoryImpl;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -43,7 +43,7 @@ public class CustomerServiceImpl implements ICustomerService {
     private static final int ACCOUNT_NUMBER_LENGTH = 10;
     private static final int MAX_NAME_LENGTH = 250;
     private static final int MAX_CSV_ROWS = 10000;
-    private static final int CHUNK_SIZE = 500;
+    private static final int BATCH_SIZE = 500;
     private static final String INVALID_HEADER_ERROR = "Invalid CSV header.";
     private static final String INVALID_ACCOUNT_NUMBER_ERROR = "Invalid account number.";
     private static final String INVALID_NAME_ERROR = "Invalid name.";
@@ -51,7 +51,7 @@ public class CustomerServiceImpl implements ICustomerService {
     private static final String DUPLICATE_ACCOUNT_NUMBER_ERROR = "Duplicate account number.";
 
     @Autowired
-    private ICustomerRepository customerRepository;
+    private CustomerRepositoryImpl customerRepository;
 
     @Override
     @Transactional
@@ -62,58 +62,29 @@ public class CustomerServiceImpl implements ICustomerService {
         List<CsvValidationError> errors = validateCsvEntries(csvPath);
         Asserter.assertTrue(errors.isEmpty(), BizErrorCode.INVALID_CSV_FILE, errors);
 
-        int offset = 0;
-        while (true) {
-            List<Customer> customers = getCustomersByChunk(csvPath, offset);
-            if (customers.isEmpty()){
-                break;
+        int modifiedCount = 0;
+        try (BufferedReader reader = Files.newBufferedReader(csvPath, StandardCharsets.UTF_8);
+             CSVParser parser = CSVFormat.DEFAULT.builder()
+                     .setIgnoreEmptyLines(false)
+                     .build()
+                     .parse(reader)) {
+            Iterator<CSVRecord> iterator = parser.iterator();
+            if (iterator.hasNext()) {
+                iterator.next();
             }
-            customerRepository.batchUpsert(customers);
-            offset += customers.size();
+
+            while (iterator.hasNext()) {
+                List<Customer> customers = readNextCustomerBatch(iterator, BATCH_SIZE);
+                if (customers.isEmpty()){
+                    break;
+                }
+                modifiedCount += customerRepository.batchUpsert(customers);
+            }
+        } catch (IOException e) {
+            throw new BizException(BizErrorCode.INVALID_CSV_FILEPATH);
         }
-        return new CreateCustomerByCsvResult();
-
+        return new CreateCustomerByCsvResult(modifiedCount);
     }
-
-
-//    @Override
-//    @Transactional
-//    public CreateCustomerByCsvResult createCustomerByCSV(String csvFilePath) {
-//        Asserter.assertNotNull(csvFilePath, ParamErrorCode.NULL_PARAM);
-//        Path csvPath = validateCsvFileExists(csvFilePath);
-//
-//        ParsedCustomerCsv parsedCustomerCsv = parseAndValidateCsv(csvPath);
-//        Asserter.assertTrue(parsedCustomerCsv.errors().isEmpty(), BizErrorCode.INVALID_CSV_FILE, parsedCustomerCsv.errors());
-//
-//        List<String> existingAccountNumbers = customerRepository.findExistingAccountNumbers(parsedCustomerCsv.customers()
-//                .stream()
-//                .map(Customer::getAccountNumber)
-//                .toList());
-//
-//        List<Customer> existingCustomers =
-//                parsedCustomerCsv.customers()
-//                        .stream()
-//                        .filter(customer ->
-//                                existingAccountNumbers.contains(
-//                                        customer.getAccountNumber()
-//                                )
-//                        )
-//                        .toList();
-//
-//        List<Customer> newCustomers =
-//                parsedCustomerCsv.customers()
-//                        .stream()
-//                        .filter(customer ->
-//                                !existingAccountNumbers.contains(
-//                                        customer.getAccountNumber()
-//                                )
-//                        )
-//                        .toList();
-//
-//        int createdCount = customerRepository.batchInsert(newCustomers);
-//        int modifiedCount = customerRepository.batchUpdate(existingCustomers);
-//        return new CreateCustomerByCsvResult(createdCount, modifiedCount, List.of());
-//    }
 
     @Override
     public Customer viewCustomerProfile(String accNo) {
@@ -127,70 +98,8 @@ public class CustomerServiceImpl implements ICustomerService {
     public String exportCustomersByDates(LocalDateTime startDate, LocalDateTime endDate) {
         Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, "startDate");
         Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, "endDate");
-
-        List<List<Customer>> shardCustomerLists = new ArrayList<>();
-
-        for (int i = 0; i < 10; i++) {
-            String tableName = "customers_" + i;
-
-            List<Customer> shardCustomers =
-                    customerRepository.selectCustomersByDates(
-                            tableName,
-                            startDate,
-                            endDate
-                    );
-
-            shardCustomerLists.add(shardCustomers);
-        }
-
-        List<Customer> customers = mergeSortedCustomerLists(shardCustomerLists);
-
+        List<Customer> customers = customerRepository.selectCustomersByDates(startDate, endDate);
         return writeCustomersToCsv(customers);
-    }
-
-    private List<Customer> mergeSortedCustomerLists(List<List<Customer>> shardCustomerLists) {
-        List<Customer> result = new ArrayList<>();
-
-        PriorityQueue<CustomerCursor> minHeap = new PriorityQueue<>(
-                Comparator.comparing(cursor -> cursor.customer().getCreatedAt())
-        );
-
-        for (int shardIndex = 0; shardIndex < shardCustomerLists.size(); shardIndex++) {
-            List<Customer> shardCustomers = shardCustomerLists.get(shardIndex);
-
-            if (!shardCustomers.isEmpty()) {
-                minHeap.offer(new CustomerCursor(
-                        shardCustomers.get(0),
-                        shardIndex,
-                        0
-                ));
-            }
-        }
-
-        while (!minHeap.isEmpty()) {
-            CustomerCursor earliest = minHeap.poll();
-            result.add(earliest.customer());
-
-            int nextCustomerIndex = earliest.customerIndex() + 1;
-            List<Customer> sameShardCustomers = shardCustomerLists.get(earliest.shardIndex());
-
-            if (nextCustomerIndex < sameShardCustomers.size()) {
-                minHeap.offer(new CustomerCursor(
-                        sameShardCustomers.get(nextCustomerIndex),
-                        earliest.shardIndex(),
-                        nextCustomerIndex
-                ));
-            }
-        }
-
-        return result;
-    }
-
-    private record CustomerCursor(
-            Customer customer,
-            int shardIndex,
-            int customerIndex
-    ) {
     }
 
     private String writeCustomersToCsv(List<Customer> customers) {
@@ -244,6 +153,22 @@ public class CustomerServiceImpl implements ICustomerService {
         }
     }
 
+    private List<Customer> readNextCustomerBatch(Iterator<CSVRecord> iterator, int batchSize) {
+        List<Customer> customers = new ArrayList<>(batchSize);
+        while (iterator.hasNext() && customers.size() < batchSize) {
+            CSVRecord record = iterator.next();
+            String accountNumber = getValue(record, ACCOUNT_NUMBER_COLUMN).trim();
+            String name = getValue(record, NAME_COLUMN).trim();
+            String gender = getValue(record, GENDER_COLUMN).trim();
+            customers.add(Customer.builder()
+                    .accountNumber(accountNumber)
+                    .gender(Gender.valueOf(gender))
+                    .name(name)
+                    .build()
+            );
+        }
+        return customers;
+    }
 
     private List<CsvValidationError> validateCsvEntries(Path csvPath) {
         List<CsvValidationError> errors = new ArrayList<>();
@@ -258,6 +183,7 @@ public class CustomerServiceImpl implements ICustomerService {
             Iterator<CSVRecord> iterator = parser.iterator();
             if (!iterator.hasNext()) {
                 errors.add(new CsvValidationError(1, INVALID_HEADER_ERROR));
+                return errors;
             }
 
             CSVRecord headerRecord = iterator.next();
@@ -268,9 +194,9 @@ public class CustomerServiceImpl implements ICustomerService {
             while (iterator.hasNext() && rowCount < MAX_CSV_ROWS) {
                 CSVRecord record = iterator.next();
                 int lineNumber = Math.toIntExact(record.getRecordNumber());
-                String accountNumber = getValue(record, ACCOUNT_NUMBER_COLUMN).trim();
-                String name = getValue(record, NAME_COLUMN).trim();
-                String gender = getValue(record, GENDER_COLUMN).trim();
+                String accountNumber = getTrimmedValue(record, ACCOUNT_NUMBER_COLUMN);
+                String name = getTrimmedValue(record, NAME_COLUMN);
+                String gender = getTrimmedValue(record, GENDER_COLUMN);
                 boolean valid = validateRow(lineNumber, accountNumber, name, gender, errors);
                 if (valid){
                     linesByAccountNumber.computeIfAbsent(accountNumber, ignored -> new ArrayList<>()).add(lineNumber);
@@ -286,54 +212,10 @@ public class CustomerServiceImpl implements ICustomerService {
             throw new BizException(BizErrorCode.INVALID_CSV_FILEPATH);
         }
     }
-    /*
-    private ParsedCustomerCsv parseAndValidateCsv(Path csvPath) {
-        List<CsvValidationError> errors = new ArrayList<>();
-        List<Customer> customers = new ArrayList<>();
-        Map<String, List<Integer>> linesByAccountNumber = new LinkedHashMap<>();
-
-        try (BufferedReader reader = Files.newBufferedReader(csvPath, StandardCharsets.UTF_8);
-             CSVParser parser = CSVFormat.DEFAULT.builder()
-                     .setIgnoreEmptyLines(false)
-                     .build()
-                     .parse(reader)) {
-            Iterator<CSVRecord> iterator = parser.iterator();
-            if (!iterator.hasNext()) {
-                errors.add(new CsvValidationError(1, INVALID_HEADER_ERROR));
-            }
-
-            CSVRecord headerRecord = iterator.next();
-            if (!isExpectedHeader(headerRecord)) {
-                errors.add(new CsvValidationError(1, INVALID_HEADER_ERROR));
-            }
-
-            while (iterator.hasNext() && customers.size() < MAX_CSV_ROWS) {
-                CSVRecord record = iterator.next();
-                int lineNumber = Math.toIntExact(record.getRecordNumber());
-                String accountNumber = getValue(record, ACCOUNT_NUMBER_COLUMN).trim();
-                String name = getValue(record, NAME_COLUMN).trim();
-                String gender = getValue(record, GENDER_COLUMN).trim();
-
-                boolean valid = validateRow(lineNumber, accountNumber, name, gender, errors);
-                if (valid) {
-                    customers.add(Customer.builder()
-                            .accountNumber(accountNumber)
-                            .gender(Gender.valueOf(gender))
-                            .name(name)
-                            .build()
-                    );
-                    linesByAccountNumber.computeIfAbsent(accountNumber, ignored -> new ArrayList<>()).add(lineNumber);
-                }
-            }
-            addDuplicateAccountNumberErrors(linesByAccountNumber, errors);
-            return new ParsedCustomerCsv(customers, errors);
-        } catch (IOException e) {
-            throw new BizException(BizErrorCode.INVALID_CSV_FILEPATH);
-        }
-    }*/
 
     private boolean isExpectedHeader(CSVRecord headerRecord) {
-        return ACCOUNT_NUMBER_HEADER.equals(getValue(headerRecord, ACCOUNT_NUMBER_COLUMN))
+        return headerRecord.size() == 3
+                && ACCOUNT_NUMBER_HEADER.equals(getValue(headerRecord, ACCOUNT_NUMBER_COLUMN))
                 && NAME_HEADER.equals(getValue(headerRecord, NAME_COLUMN))
                 && GENDER_HEADER.equals(getValue(headerRecord, GENDER_COLUMN));
     }
@@ -375,6 +257,11 @@ public class CustomerServiceImpl implements ICustomerService {
         return record.size() > index ? record.get(index) : null;
     }
 
+    private String getTrimmedValue(CSVRecord record, int index) {
+        String value = getValue(record, index);
+        return value == null ? null : value.trim();
+    }
+
     private void addDuplicateAccountNumberErrors(Map<String, List<Integer>> linesByAccountNumber,
                                                  List<CsvValidationError> errors) {
         for (List<Integer> lineNumbers : linesByAccountNumber.values()) {
@@ -384,11 +271,6 @@ public class CustomerServiceImpl implements ICustomerService {
                 }
             }
         }
-    }
-
-
-    private record ParsedCustomerCsv(List<Customer> customers,
-                                     List<CsvValidationError> errors) {
     }
 
     private record CsvValidationError(int lineNumber, String message) implements Comparable<CsvValidationError> {

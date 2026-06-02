@@ -14,6 +14,7 @@ public interface CustomerMapper {
 
     int batchInsert(@Param("customers") List<CustomerDO> customers);
     int batchUpdate(@Param("customers") List<CustomerDO> customers);
+    int batchUpsert(@Param("tableName") String tableName, @Param("customers") List<CustomerDO> customers);
     CustomerDO selectCustomerByAccNo(@Param("accNo") String accNo, @Param("tableName") String tableName);
     List<CustomerDO> selectCustomersByDates(@Param("tableName") String tableName, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 }
