@@ -62,7 +62,12 @@ class CustomerControllerTest {
     void createCustomersByCsv_blankCsvFilePath_fails() {
         CreateCustomersByCsvRequest request = buildCreateCustomersByCsvRequest("   ");
 
-        assertThrows(ParamException.class, () -> customerController.createCustomersByCsv(request));
+        ParamException exception = assertThrows(
+                ParamException.class,
+                () -> customerController.createCustomersByCsv(request)
+        );
+
+        assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
         verify(customerService, never()).createCustomerByCSV(org.mockito.ArgumentMatchers.anyString());
     }
 

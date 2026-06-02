@@ -59,6 +59,7 @@ public class CustomerServiceImpl implements ICustomerService {
     @Transactional
     public CreateCustomerByCsvResult createCustomerByCSV(String csvFilePath){
         Asserter.assertNotNull(csvFilePath, ParamErrorCode.NULL_PARAM);
+        Asserter.assertTrue(!csvFilePath.isBlank(), ParamErrorCode.INVALID_PARAM, "csvFilePath");
         Path csvPath = validateCsvFileExists(csvFilePath);
 
         List<CsvValidationError> errors = validateCsvEntries(csvPath);
@@ -211,6 +212,7 @@ public class CustomerServiceImpl implements ICustomerService {
             if (iterator.hasNext()) {
                 errors.add(new CsvValidationError(MAX_CSV_ROWS + 2, "CSV exceeds maximum allowed rows."));
             }
+            errors.sort(null);
             return errors;
         } catch (IOException e) {
             throw new BizException(BizErrorCode.INVALID_CSV_FILEPATH);

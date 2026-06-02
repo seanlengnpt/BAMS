@@ -1,8 +1,11 @@
 package com.shopee.banking.bams.infra.dal.repository.impl;
 
 import com.shopee.banking.bams.common.exception.BizException;
+import com.shopee.banking.bams.common.exception.DependencyException;
 import com.shopee.banking.bams.common.exception.ParamException;
 import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
+import com.shopee.banking.bams.common.exception.enums.Gender;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
 import com.shopee.banking.bams.infra.dal.converter.CustomerDataConverter;
@@ -20,15 +23,19 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -38,6 +45,7 @@ class CustomerRepositoryImplTest {
 
     private static final LocalDateTime START_DATE = LocalDateTime.of(2020, 5, 1, 0, 0);
     private static final LocalDateTime END_DATE = LocalDateTime.of(2020, 5, 31, 23, 59, 59);
+    private static final CustomerShardRouter CUSTOMER_SHARD_ROUTER = new CustomerShardRouter();
 
     private CustomerRepositoryImpl customerRepository;
 
@@ -49,7 +57,75 @@ class CustomerRepositoryImplTest {
         customerRepository = new CustomerRepositoryImpl();
         ReflectionTestUtils.setField(customerRepository, "customerMapper", customerMapper);
         ReflectionTestUtils.setField(customerRepository, "customerDataConverter", new CustomerDataConverter());
-        ReflectionTestUtils.setField(customerRepository, "customerShardRouter", new CustomerShardRouter());
+        ReflectionTestUtils.setField(customerRepository, "customerShardRouter", CUSTOMER_SHARD_ROUTER);
+    }
+
+    @Test
+    @DisplayName("batchUpsert fails when customers is null")
+    void batchUpsert_nullCustomers_fails() {
+        ParamException exception = assertThrows(
+                ParamException.class,
+                () -> customerRepository.batchUpsert(null)
+        );
+
+        assertEquals(ParamErrorCode.NULL_PARAM, exception.getErrorType());
+        verifyNoInteractions(customerMapper);
+    }
+
+    @Test
+    @DisplayName("batchUpsert returns zero and skips mapper when customers is empty")
+    void batchUpsert_emptyCustomers_returnsZero() {
+        int modifiedCount = customerRepository.batchUpsert(List.of());
+
+        assertEquals(0, modifiedCount);
+        verifyNoInteractions(customerMapper);
+    }
+
+    @Test
+    @DisplayName("batchUpsert groups customers by shard table and sums modified count")
+    void batchUpsert_validCustomers_groupsByShardAndReturnsModifiedCount() {
+        List<Customer> customers = List.of(
+                buildCustomer("1000000001", "Alice Tan", Gender.F),
+                buildCustomer("1000000002", "Bob Lim", Gender.M),
+                buildCustomer("1000000003", "Casey Ng", Gender.OTHERS)
+        );
+        Map<String, List<Customer>> customersByTable = customers.stream()
+                .collect(Collectors.groupingBy(
+                        customer -> CUSTOMER_SHARD_ROUTER.getTableName(customer.getAccountNumber()),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        when(customerMapper.batchUpsert(anyString(), anyList()))
+                .thenAnswer(invocation -> ((List<?>) invocation.getArgument(1)).size());
+
+        int modifiedCount = customerRepository.batchUpsert(customers);
+
+        assertEquals(customers.size(), modifiedCount);
+        for (Map.Entry<String, List<Customer>> entry : customersByTable.entrySet()) {
+            List<CustomerDO> expectedCustomerDos = entry.getValue().stream()
+                    .map(this::buildCustomerDO)
+                    .toList();
+            verify(customerMapper).batchUpsert(entry.getKey(), expectedCustomerDos);
+        }
+    }
+
+    @Test
+    @DisplayName("batchUpsert wraps mapper failure as dependency exception")
+    void batchUpsert_mapperFailure_fails() {
+        List<Customer> customers = List.of(
+                buildCustomer("1000000001", "Alice Tan", Gender.F)
+        );
+        doThrow(new RuntimeException("db failure"))
+                .when(customerMapper)
+                .batchUpsert(anyString(), anyList());
+
+        DependencyException exception = assertThrows(
+                DependencyException.class,
+                () -> customerRepository.batchUpsert(customers)
+        );
+
+        assertEquals(DependencyErrorCode.DATABASE_UPDATE_FAILED, exception.getErrorType());
     }
 
     @Test
@@ -154,6 +230,22 @@ class CustomerRepositoryImplTest {
         customerDO.setGender("M");
         customerDO.setCreatedAt(createdAt);
         customerDO.setModifiedAt(createdAt.plusHours(1));
+        return customerDO;
+    }
+
+    private Customer buildCustomer(String accountNumber, String name, Gender gender) {
+        return Customer.builder()
+                .accountNumber(accountNumber)
+                .name(name)
+                .gender(gender)
+                .build();
+    }
+
+    private CustomerDO buildCustomerDO(Customer customer) {
+        CustomerDO customerDO = new CustomerDO();
+        customerDO.setAccountNumber(customer.getAccountNumber());
+        customerDO.setName(customer.getName());
+        customerDO.setGender(customer.getGender().name());
         return customerDO;
     }
 }
