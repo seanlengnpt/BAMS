@@ -1,5 +1,9 @@
 package com.shopee.banking.bams.domain;
+import lombok.Getter;
+import lombok.Setter;
 
+@Getter
+@Setter
 public class BaseEntity {
     private Long version;
 

@@ -1,4 +1,4 @@
-package com.shopee.banking.bams.app.utils;
+package com.shopee.banking.bams.common.util;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -15,6 +15,7 @@ public final class JwtUtils {
     public static final String ROLE_ADMIN = "admin";
     public static final String ROLE_CLAIM = "role";
     public static final String USERNAME_CLAIM = "username";
+
 
     private JwtUtils() {
     }
@@ -39,6 +40,19 @@ public final class JwtUtils {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public static boolean isTokenValid(String token, SecretKey secretKey) {
+        try {
+            Jwts.parser()
+                    .verifyWith(secretKey)
+                    .build()
+                    .parseSignedClaims(token);
+
+            return true;
+        } catch (Exception exception) {
+            return false;
+        }
     }
 
     private static String createToken(String subject,

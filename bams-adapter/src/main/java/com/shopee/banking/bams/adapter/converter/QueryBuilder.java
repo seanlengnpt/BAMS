@@ -4,7 +4,6 @@ import com.shopee.banking.bams.api.api.request.EditAdminProfileRequest;
 import com.shopee.banking.bams.api.api.request.ViewAdminProfileRequest;
 import com.shopee.banking.bams.app.service.dto.query.AdminProfileQuery;
 import com.shopee.banking.bams.app.service.dto.query.EditAdminProfileQuery;
-import com.shopee.banking.bams.domain.aggregateRoot.Admin;
 import com.shopee.banking.bams.domain.valueObject.AdminId;
 
 public class QueryBuilder {
@@ -22,4 +21,5 @@ public class QueryBuilder {
         query.setProfilePictureUrl(request.getProfilePictureUrl());
         return query;
     }
+
 }

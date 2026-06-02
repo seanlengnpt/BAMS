@@ -1,6 +1,5 @@
-package com.shopee.banking.bams.domain;
+package com.shopee.banking.bams.domain.aggregateRoot;
 
-import com.shopee.banking.bams.domain.aggregateRoot.BaseAggregateRoot;
 import com.shopee.banking.bams.domain.valueObject.AdminId;
 import lombok.Getter;
 

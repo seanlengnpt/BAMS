@@ -1,24 +1,35 @@
 package com.shopee.banking.bams.adapter.aspect;
+import com.shopee.banking.bams.common.AuthException;
+import com.shopee.banking.bams.common.enums.AuthErrorCode;
 import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.factory.ExceptionFactory;
 import com.shopee.banking.bams.common.result.Result;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.common.BaseException;
 import com.shopee.banking.bams.common.enums.SystemErrorCode;
+import com.shopee.banking.bams.common.util.JwtUtils;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.Objects;
+
 @Component
 @Aspect
 @Order(Integer.MIN_VALUE + 2)
 public class ControllerAspect {
+    @Value("${bams.auth.jwt.secret}")
+    private String jwtSecret;
 
     @Pointcut("within(com.shopee.banking.bams.adapter..*)")
     public void bankingAdapter() {

@@ -1,11 +1,12 @@
 spring:
   application:
     name: BAMS
+
   datasource:
-    url: jdbc:mysql://localhost:3306/bams_learning
+    url: jdbc:mysql://localhost:3306/bams_learning?useSSL=false&serverTimezone=Asia/Singapore&allowPublicKeyRetrieval=true
     username: bams
     password: bams
-
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
 management:
   endpoints:
@@ -16,7 +17,6 @@ management:
     health:
       probes:
         enabled: true
-
 
 mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
@@ -30,3 +30,11 @@ bams:
       secret: local-development-bams-auth-secret-change-me
       access-token-ttl-seconds: 900
       refresh-token-ttl-seconds: 604800
+
+logging:
+  level:
+    root: INFO
+    org.springframework.jdbc: DEBUG
+    org.mybatis: DEBUG
+    org.apache.shardingsphere: DEBUG
+    com.zaxxer.hikari: DEBUG

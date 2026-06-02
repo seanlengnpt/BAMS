@@ -4,7 +4,7 @@ import com.shopee.banking.bams.common.DependencyException;
 import com.shopee.banking.bams.common.enums.DependencyErrorCode;
 import com.shopee.banking.bams.common.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
-import com.shopee.banking.bams.domain.JwtToken;
+import com.shopee.banking.bams.domain.aggregateRoot.JwtToken;
 import com.shopee.banking.bams.domain.repository.IAuthTokenRepository;
 import com.shopee.banking.bams.infra.dal.converter.AdminTokenDataConverter;
 import com.shopee.banking.bams.infra.dal.dataObject.AdminTokenDO;

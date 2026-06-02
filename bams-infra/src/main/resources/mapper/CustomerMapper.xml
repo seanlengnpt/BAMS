@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shopee.banking.bams.infra.dal.mapper.CustomerMapper">
+
+    <resultMap id="BaseResultMap" type="com.shopee.banking.bams.infra.dal.dataObject.CustomerDO">
+        <id property="id" column="id"/>
+        <result property="accountNumber" column="account_number"/>
+        <result property="name" column="name"/>
+        <result property="gender" column="gender"/>
+        <result property="version" column="version"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="modifiedAt" column="modified_at"/>
+    </resultMap>
+
+    <select id="selectExistingAccountNumbers" resultType="java.lang.String">
+        SELECT account_number
+        FROM customers
+        WHERE account_number IN
+        <foreach collection="accountNumbers" item="accountNumber" open="(" separator="," close=")">
+            #{accountNumber}
+        </foreach>
+    </select>
+
+    <select id="selectCustomerByAccNo" resultType="com.shopee.banking.bams.infra.dal.dataObject.CustomerDO">
+        SELECT id, gender, name, account_number, created_at, modified_at
+        FROM ${tableName}
+        WHERE account_number = #{accNo}
+    </select>
+
+    <select id="selectCustomersByDates" resultMap="BaseResultMap">
+        SELECT
+        account_number,
+        name,
+        gender,
+        created_at,
+        modified_at
+        FROM ${tableName}
+        WHERE created_at BETWEEN #{startDate} AND #{endDate}
+        ORDER BY created_at ASC
+    </select>
+
+    <insert id="batchInsert">
+        INSERT INTO customers (account_number, name, gender, created_at, modified_at)
+        VALUES
+        <foreach collection="customers" item="customer" separator=",">
+            (#{customer.accountNumber}, #{customer.name}, #{customer.gender}, NOW(), NOW())
+        </foreach>
+    </insert>
+
+    <update id="batchUpdate" parameterType="java.util.List">
+        UPDATE customers
+        <set>
+            name = CASE account_number
+            <foreach collection="customers" item="customer">
+                <if test="customer.name != null">
+                    WHEN #{customer.accountNumber} THEN #{customer.name}
+                </if>
+            </foreach>
+            ELSE name
+            END,
+            gender = CASE account_number
+            <foreach collection="customers" item="customer">
+                <if test="customer.gender != null">
+                    WHEN #{customer.accountNumber} THEN #{customer.gender}
+                </if>
+            </foreach>
+            ELSE gender
+            END,
+            modified_at = NOW()
+        </set>
+        WHERE account_number IN
+        <foreach collection="customers" item="customer" open="(" separator="," close=")">
+            #{customer.accountNumber}
+        </foreach>
+    </update>
+
+</mapper>

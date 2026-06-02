@@ -1,4 +1,4 @@
-package com.shopee.banking.bams.api.api.enums;
+package com.shopee.banking.bams.common.enums;
 
 public enum Gender {
     M,

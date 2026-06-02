@@ -1,6 +1,6 @@
 package com.shopee.banking.bams.app.service.dto;
 
-import com.shopee.banking.bams.domain.JwtToken;
+import com.shopee.banking.bams.domain.aggregateRoot.JwtToken;
 import lombok.Getter;
 import lombok.Setter;
 

@@ -9,7 +9,7 @@ import com.shopee.banking.bams.app.service.IAuthService;
 import com.shopee.banking.bams.app.service.dto.AuthTokens;
 import com.shopee.banking.bams.common.result.Result;
 import com.shopee.banking.bams.common.util.ValidationUtils;
-import com.shopee.banking.bams.domain.JwtToken;
+import com.shopee.banking.bams.domain.aggregateRoot.JwtToken;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

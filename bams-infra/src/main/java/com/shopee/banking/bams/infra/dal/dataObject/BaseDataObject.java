@@ -17,7 +17,7 @@ public class BaseDataObject {
 
     private String updateUserId = "promotion-service";
 
-    private Long version = 0L;
+    private Long version;
 
     public BaseDataObject() {
     }

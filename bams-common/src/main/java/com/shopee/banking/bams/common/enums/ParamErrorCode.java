@@ -8,7 +8,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum ParamErrorCode implements ErrorType {
     //Param error code starts with 3
-    INVALID_PARAM(30001, "Input param is invalid!"),
+    INVALID_PARAM(30001, "Input param(s) is invalid: {0}"),
     NULL_PARAM(30003, "Param {0} is not found!"),
     MISSING_PROPERTY(30002, "Property {0} is not found!");
     private final int code;

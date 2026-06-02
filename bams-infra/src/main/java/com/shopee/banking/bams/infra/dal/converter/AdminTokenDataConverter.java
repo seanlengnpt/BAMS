@@ -1,6 +1,6 @@
 package com.shopee.banking.bams.infra.dal.converter;
 
-import com.shopee.banking.bams.domain.JwtToken;
+import com.shopee.banking.bams.domain.aggregateRoot.JwtToken;
 import com.shopee.banking.bams.domain.valueObject.AdminId;
 import com.shopee.banking.bams.infra.dal.dataObject.AdminTokenDO;
 import org.springframework.stereotype.Component;

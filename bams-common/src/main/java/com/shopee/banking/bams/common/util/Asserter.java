@@ -21,4 +21,10 @@ public class Asserter {
             ExceptionFactory.throwException(errorType);
         }
     }
+
+    public static void assertTrue(boolean condition, ErrorType errorType, Object... args){
+        if (!condition){
+            ExceptionFactory.throwException(errorType, args);
+        }
+    }
 }
