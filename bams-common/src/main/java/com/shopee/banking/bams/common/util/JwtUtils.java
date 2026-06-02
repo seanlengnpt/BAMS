@@ -42,18 +42,6 @@ public final class JwtUtils {
                 .getPayload();
     }
 
-    public static boolean isTokenValid(String token, SecretKey secretKey) {
-        try {
-            Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token);
-
-            return true;
-        } catch (Exception exception) {
-            return false;
-        }
-    }
 
     private static String createToken(String subject,
                                       String username,

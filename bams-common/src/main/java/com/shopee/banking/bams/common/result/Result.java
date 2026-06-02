@@ -3,6 +3,8 @@ package com.shopee.banking.bams.common.result;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.shopee.banking.bams.common.exception.BaseException;
 import com.shopee.banking.bams.common.exception.ErrorType;
+import com.shopee.banking.bams.common.exception.SystemException;
+import com.shopee.banking.bams.common.exception.enums.SystemErrorCode;
 import lombok.Data;
 
 @Data
@@ -42,6 +44,13 @@ public class Result<T> {
     public static <T> Result<T> success() {return success(null);}
 
     public static <T> Result<T> fail(BaseException e){return new Result<>(e.getErrorType().getCode(), e.getMessage(), null);}
+
+    public static <T> Result<T> fail(Throwable e){
+        if (e instanceof BaseException baseException) {
+            return fail(baseException);
+        }
+        return fail(new SystemException(SystemErrorCode.UNKNOWN_EXCEPTION));
+    }
 
     public static <T> Result<T> fail(ErrorType e){return new Result<>(e);}
 

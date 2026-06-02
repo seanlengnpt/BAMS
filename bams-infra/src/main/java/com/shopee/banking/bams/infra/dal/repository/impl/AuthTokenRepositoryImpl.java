@@ -25,7 +25,8 @@ public class AuthTokenRepositoryImpl implements IAuthTokenRepository {
         Asserter.assertNotNull(refreshToken, ParamErrorCode.NULL_PARAM, "Refresh token");
         AdminTokenDO adminTokenDO = adminTokenDataConverter.toDataObject(refreshToken);
         try {
-            adminTokenMapper.insert(adminTokenDO);
+            int insertedRows = adminTokenMapper.insert(adminTokenDO);
+            Asserter.assertTrue(insertedRows > 0, DependencyErrorCode.DATABASE_INSERT_FAILED, refreshToken);
         } catch (Throwable e) {
             throw new DependencyException(DependencyErrorCode.DATABASE_INSERT_FAILED, refreshToken);
         }

@@ -1,5 +1,6 @@
 package com.shopee.banking.bams.adapter.filter;
 
+import com.shopee.banking.bams.common.exception.BaseException;
 import com.shopee.banking.bams.common.exception.enums.AuthErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.common.util.JwtUtils;
@@ -42,30 +43,32 @@ public class JwtAuthFilter implements Filter {
         HttpServletResponse httpResponse = (HttpServletResponse) response;
         String authHeader = httpRequest.getHeader("Authorization");
 
-        Asserter.assertTrue(authHeader != null && authHeader.startsWith("Bearer "), AuthErrorCode.INVALID_ACCESS_TOKEN);
-
-        String token = authHeader.substring(7);
         try {
+            Asserter.assertTrue(
+                    authHeader != null && authHeader.startsWith("Bearer ") && authHeader.length() >= 8,
+                    AuthErrorCode.INVALID_ACCESS_TOKEN
+            );
+
+            String token = authHeader.substring(7);
             Claims claims = JwtUtils.parseClaims(token, jwtSecret);
             Asserter.assertTrue(
                     Objects.equals(JwtUtils.ROLE_ADMIN, claims.get(JwtUtils.ROLE_CLAIM, String.class)),
                     AuthErrorCode.INVALID_ACCESS_TOKEN
             );
-        } catch (JwtException | IllegalArgumentException e) {
-            httpResponse.setStatus(401);
-            httpResponse.setContentType("application/json");
-            httpResponse.getWriter().write(String.format(
-                    """
-                    {
-                    code: %s,
-                    msg: %s
-                    }
-                    """,
-                    AuthErrorCode.INVALID_ACCESS_TOKEN.getCode(),
-                    AuthErrorCode.INVALID_ACCESS_TOKEN.getMsg()
-            ));
+        } catch (JwtException | IllegalArgumentException | BaseException e) {
+            writeUnauthorizedResponse(httpResponse);
             return;
         }
         chain.doFilter(request, response);
+    }
+
+    private void writeUnauthorizedResponse(HttpServletResponse httpResponse) throws IOException {
+        httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        httpResponse.setContentType("application/json");
+        httpResponse.getWriter().write(String.format(
+                "{\"code\": %s, \"msg\": \"%s\"}",
+                AuthErrorCode.INVALID_ACCESS_TOKEN.getCode(),
+                AuthErrorCode.INVALID_ACCESS_TOKEN.getMsg()
+        ));
     }
 }

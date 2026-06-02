@@ -3,13 +3,11 @@ import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.common.exception.BaseException;
-import com.shopee.banking.bams.common.exception.enums.SystemErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
@@ -20,8 +18,6 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Aspect
 @Order(Integer.MIN_VALUE + 2)
 public class ControllerAspect {
-    @Value("${bams.auth.jwt.secret}")
-    private String jwtSecret;
 
     @Pointcut("within(com.shopee.banking.bams.adapter..*)")
     public void bankingAdapter() {
@@ -63,18 +59,15 @@ public class ControllerAspect {
                 ? joinPoint.getArgs()[0]
                 : null;
 
-        Object response = null;
-        if (HttpMethod.POST.name().equals(servletRequest.getMethod())) {
-            Asserter.assertNotNull(requestBody, ParamErrorCode.INVALID_PARAM);
-        }
         try{
-            response = joinPoint.proceed();
+            if (HttpMethod.POST.name().equals(servletRequest.getMethod())) {
+                Asserter.assertNotNull(requestBody, ParamErrorCode.NULL_PARAM);
+            }
+            return joinPoint.proceed();
         }catch (BaseException e){
             return Result.fail(e);
-        }catch (Throwable T){
-            System.out.println(T.getMessage());
-            return Result.fail(SystemErrorCode.UNKNOWN_EXCEPTION);
+        }catch (Throwable e){
+            return Result.fail(e);
         }
-        return response;
     }
 }
