@@ -1,9 +1,10 @@
 package com.shopee.banking.bams.infra.dal.repository.impl;
 
-import com.shopee.banking.bams.common.DependencyException;
-import com.shopee.banking.bams.common.enums.BizErrorCode;
-import com.shopee.banking.bams.common.enums.DependencyErrorCode;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.BaseException;
+import com.shopee.banking.bams.common.exception.DependencyException;
+import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
 import com.shopee.banking.bams.domain.repository.ICustomerRepository;
@@ -53,37 +54,6 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
     }
 
     @Override
-    public void selectCustomersByDates(LocalDateTime startDate, LocalDateTime endDate, int numRows, Consumer<Customer> consumer) {
-        Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, "startDate");
-        Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, "endDate");
-        Asserter.assertTrue(!startDate.isAfter(endDate), ParamErrorCode.INVALID_PARAM, "startDate, endDate");
-        Asserter.assertTrue(numRows > 0, ParamErrorCode.INVALID_PARAM, "numRows");
-        Asserter.assertNotNull(consumer, ParamErrorCode.NULL_PARAM, "consumer");
-        try{
-            List<List<Customer>> shardCustomerLists = new ArrayList<>(CUSTOMER_SHARD_COUNT);
-            for (int shardIndex = 0; shardIndex < CUSTOMER_SHARD_COUNT; shardIndex++) {
-                shardCustomerLists.add(refillCustomersInShard(
-                        getShardTableName(shardIndex),
-                        startDate,
-                        endDate,
-                        0
-                ));
-            }
-            Asserter.assertTrue(
-                    shardCustomerLists.stream().anyMatch(shardCustomers -> !shardCustomers.isEmpty()),
-                    BizErrorCode.CUSTOMERS_NOT_FOUND_EXPORT,
-                    "createdAt between " + startDate + " and " + endDate
-            );
-            mergeSortedCustomerLists(shardCustomerLists, startDate, endDate, numRows, consumer);
-        } catch (UncheckedIOException e) {
-            throw e;
-        } catch(Throwable e){
-            throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, "Select customers by " + startDate + " , " + endDate);
-        }
-    }
-
-
-    @Override
     public int batchUpsert(List<Customer> customers) {
         Asserter.assertNotNull(customers, ParamErrorCode.NULL_PARAM, "Customers");
         if (customers.isEmpty()) {
@@ -108,6 +78,37 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
             throw new DependencyException(DependencyErrorCode.DATABASE_UPDATE_FAILED, customers);
         }
     }
+
+    @Override
+    public void selectCustomersByDates(LocalDateTime startDate, LocalDateTime endDate, int numRows, Consumer<Customer> consumer) {
+        Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, "startDate");
+        Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, "endDate");
+        Asserter.assertTrue(!startDate.isAfter(endDate), ParamErrorCode.INVALID_PARAM, "startDate, endDate");
+        Asserter.assertTrue(numRows > 0, ParamErrorCode.INVALID_PARAM, "numRows");
+        Asserter.assertNotNull(consumer, ParamErrorCode.NULL_PARAM, "consumer");
+        try{
+            List<List<Customer>> shardCustomerLists = new ArrayList<>(CUSTOMER_SHARD_COUNT);
+            for (int shardIndex = 0; shardIndex < CUSTOMER_SHARD_COUNT; shardIndex++) {
+                shardCustomerLists.add(refillCustomersInShard(
+                        getShardTableName(shardIndex),
+                        startDate,
+                        endDate,
+                        0
+                ));
+            }
+            Asserter.assertTrue(
+                    shardCustomerLists.stream().anyMatch(shardCustomers -> !shardCustomers.isEmpty()),
+                    BizErrorCode.CUSTOMERS_NOT_FOUND_EXPORT,
+                    "createdAt between " + startDate + " and " + endDate
+            );
+            mergeSortedCustomerLists(shardCustomerLists, startDate, endDate, numRows, consumer);
+        } catch (UncheckedIOException | BaseException e) {
+            throw e;
+        } catch(Throwable e){
+            throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, "Select customers by " + startDate + " , " + endDate);
+        }
+    }
+
 
     private List<Customer> refillCustomersInShard(String tableName,
                                                   LocalDateTime startDate,
@@ -180,5 +181,4 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
             int customerIndex
     ) {
     }
-
 }

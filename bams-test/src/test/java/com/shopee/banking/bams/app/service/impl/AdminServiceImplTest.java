@@ -1,10 +1,11 @@
 package com.shopee.banking.bams.app.service.impl;
 
+import com.shopee.banking.bams.app.service.dto.query.AdminProfileQuery;
 import com.shopee.banking.bams.app.service.dto.query.EditAdminProfileQuery;
-import com.shopee.banking.bams.common.BizException;
-import com.shopee.banking.bams.common.ParamException;
-import com.shopee.banking.bams.common.enums.BizErrorCode;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.BizException;
+import com.shopee.banking.bams.common.exception.ParamException;
+import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.domain.aggregateRoot.Admin;
 import com.shopee.banking.bams.domain.repository.IAdminRepository;
 import com.shopee.banking.bams.domain.valueObject.AdminId;
@@ -44,6 +45,31 @@ class AdminServiceImplTest {
     void setUp() {
         adminService = new AdminServiceImpl();
         ReflectionTestUtils.setField(adminService, "adminRepository", adminRepository);
+    }
+
+    @Test
+    @DisplayName("getAdminById returns admin when repository finds a match")
+    void getAdminById_adminExists_returnsAdmin() {
+        AdminProfileQuery query = buildAdminProfileQuery(ADMIN_ID);
+        Admin admin = buildAdmin();
+        when(adminRepository.queryById(query.getAdminId())).thenReturn(admin);
+
+        Admin result = adminService.getAdminById(query);
+
+        assertEquals(admin, result);
+        verify(adminRepository).queryById(query.getAdminId());
+    }
+
+    @Test
+    @DisplayName("getAdminById fails when repository returns null")
+    void getAdminById_adminDoesNotExist_fails() {
+        AdminProfileQuery query = buildAdminProfileQuery(999L);
+        when(adminRepository.queryById(query.getAdminId())).thenReturn(null);
+
+        BizException exception = assertThrows(BizException.class, () -> adminService.getAdminById(query));
+
+        assertEquals(BizErrorCode.ADMIN_NOT_FOUND_MAPPING, exception.getErrorType());
+        verify(adminRepository).queryById(query.getAdminId());
     }
 
     @Test
@@ -135,6 +161,12 @@ class AdminServiceImplTest {
 
     private EditAdminProfileQuery buildEditAdminProfileQuery() {
         return buildEditAdminProfileQuery(buildAdminId(), NICKNAME, PROFILE_PICTURE_URL);
+    }
+
+    private AdminProfileQuery buildAdminProfileQuery(Long adminId) {
+        AdminProfileQuery query = new AdminProfileQuery();
+        query.setAdminId(new AdminId(adminId));
+        return query;
     }
 
     private EditAdminProfileQuery buildEditAdminProfileQuery(AdminId adminId,

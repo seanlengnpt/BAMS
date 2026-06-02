@@ -1,8 +1,8 @@
 package com.shopee.banking.bams.common.result;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.shopee.banking.bams.common.BaseException;
-import com.shopee.banking.bams.common.ErrorType;
+import com.shopee.banking.bams.common.exception.BaseException;
+import com.shopee.banking.bams.common.exception.ErrorType;
 import lombok.Data;
 
 @Data

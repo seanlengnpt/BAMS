@@ -1,7 +1,7 @@
 package com.shopee.banking.bams.common.util;
 
-import com.shopee.banking.bams.common.ParamException;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.ParamException;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;

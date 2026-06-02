@@ -1,6 +1,6 @@
-package com.shopee.banking.bams.common;
+package com.shopee.banking.bams.common.exception;
 
-import com.shopee.banking.bams.common.enums.DependencyErrorCode;
+import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
 
 public class DependencyException extends BaseException{
     public DependencyException(DependencyErrorCode errorType){

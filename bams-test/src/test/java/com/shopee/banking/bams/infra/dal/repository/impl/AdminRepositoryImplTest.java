@@ -1,7 +1,7 @@
 package com.shopee.banking.bams.infra.dal.repository.impl;
 
-import com.shopee.banking.bams.common.ParamException;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.ParamException;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.domain.aggregateRoot.Admin;
 import com.shopee.banking.bams.domain.valueObject.AdminId;
 import com.shopee.banking.bams.infra.dal.converter.AdminDataConverter;

@@ -1,8 +1,8 @@
 package com.shopee.banking.bams.infra.dal.repository.impl;
 
-import com.shopee.banking.bams.common.DependencyException;
-import com.shopee.banking.bams.common.enums.DependencyErrorCode;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.DependencyException;
+import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Admin;
 import com.shopee.banking.bams.domain.repository.IAdminRepository;

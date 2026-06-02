@@ -1,7 +1,7 @@
 package com.shopee.banking.bams.common.util;
 
-import com.shopee.banking.bams.common.ErrorType;
-import com.shopee.banking.bams.common.factory.ExceptionFactory;
+import com.shopee.banking.bams.common.exception.ErrorType;
+import com.shopee.banking.bams.common.exception.factory.ExceptionFactory;
 
 public class Asserter {
     public static void assertNotNull(Object param, ErrorType errorType){

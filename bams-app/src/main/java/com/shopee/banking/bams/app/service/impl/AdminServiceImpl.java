@@ -3,12 +3,11 @@ package com.shopee.banking.bams.app.service.impl;
 import com.shopee.banking.bams.app.service.IAdminService;
 import com.shopee.banking.bams.app.service.dto.query.AdminProfileQuery;
 import com.shopee.banking.bams.app.service.dto.query.EditAdminProfileQuery;
-import com.shopee.banking.bams.common.enums.BizErrorCode;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Admin;
 import com.shopee.banking.bams.domain.repository.IAdminRepository;
-import com.shopee.banking.bams.domain.valueObject.AdminId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +19,9 @@ public class AdminServiceImpl implements IAdminService {
 
     @Override
     public Admin getAdminById(AdminProfileQuery query) {
-        return adminRepository.queryById(query.getAdminId());
+        Admin admin = adminRepository.queryById(query.getAdminId());
+        Asserter.assertNotNull(admin, BizErrorCode.ADMIN_NOT_FOUND_MAPPING, query.getAdminId().getId());
+        return admin;
     }
 
     @Override

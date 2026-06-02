@@ -1,7 +1,7 @@
 package com.shopee.banking.bams.common.result;
 
-import com.shopee.banking.bams.common.BizException;
-import com.shopee.banking.bams.common.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.BizException;
+import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

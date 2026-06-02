@@ -1,15 +1,9 @@
 package com.shopee.banking.bams.adapter.aspect;
-import com.shopee.banking.bams.common.AuthException;
-import com.shopee.banking.bams.common.enums.AuthErrorCode;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
-import com.shopee.banking.bams.common.factory.ExceptionFactory;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
 import com.shopee.banking.bams.common.util.Asserter;
-import com.shopee.banking.bams.common.BaseException;
-import com.shopee.banking.bams.common.enums.SystemErrorCode;
-import com.shopee.banking.bams.common.util.JwtUtils;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
+import com.shopee.banking.bams.common.exception.BaseException;
+import com.shopee.banking.bams.common.exception.enums.SystemErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -21,8 +15,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-
-import java.util.Objects;
 
 @Component
 @Aspect

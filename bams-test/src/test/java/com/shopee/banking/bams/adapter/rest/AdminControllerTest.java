@@ -1,12 +1,17 @@
 package com.shopee.banking.bams.adapter.rest;
 
 import com.shopee.banking.bams.api.api.request.EditAdminProfileRequest;
-import com.shopee.banking.bams.app.service.dto.query.EditAdminProfileQuery;
+import com.shopee.banking.bams.api.api.request.ViewAdminProfileRequest;
+import com.shopee.banking.bams.api.api.response.ViewAdminProfileResponse;
 import com.shopee.banking.bams.app.service.IAdminService;
-import com.shopee.banking.bams.app.service.IAuthService;
-import com.shopee.banking.bams.common.ParamException;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.app.service.dto.query.AdminProfileQuery;
+import com.shopee.banking.bams.app.service.dto.query.EditAdminProfileQuery;
+import com.shopee.banking.bams.common.exception.BizException;
+import com.shopee.banking.bams.common.exception.ParamException;
+import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
+import com.shopee.banking.bams.domain.aggregateRoot.Admin;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,11 +22,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AdminControllerTest {
@@ -35,14 +42,70 @@ class AdminControllerTest {
     @Mock
     private IAdminService adminService;
 
-    @Mock
-    private IAuthService authService;
 
     @BeforeEach
     void setUp() {
         adminController = new AdminController();
         ReflectionTestUtils.setField(adminController, "adminService", adminService);
-        ReflectionTestUtils.setField(adminController, "authService", authService);
+    }
+
+    @Test
+    @DisplayName("getAdminProfile returns admin details when id exists")
+    void getAdminProfile_validId_returnsAdminDetails() {
+        when(adminService.getAdminById(any(AdminProfileQuery.class))).thenReturn(buildAdmin());
+
+        Result<ViewAdminProfileResponse> result = adminController.getAdminProfile(buildViewAdminProfileRequest("1"));
+
+        assertEquals(Result.SUCCESS_CODE, result.getCode());
+        assertEquals(Result.SUCCESS_MSG, result.getMsg());
+        assertNotNull(result.getData());
+        assertEquals(ADMIN_ID, result.getData().getId());
+        assertEquals("test-admin", result.getData().getUsername());
+        assertEquals(NICKNAME, result.getData().getNickname());
+        assertEquals(PROFILE_PICTURE_URL, result.getData().getProfilePictureUrl());
+
+        AdminProfileQuery query = captureAdminProfileQuery();
+        assertEquals(ADMIN_ID, query.getAdminId().getId());
+    }
+
+    @Test
+    @DisplayName("getAdminProfile fails when id is blank")
+    void getAdminProfile_blankId_fails() {
+        ParamException exception = assertThrows(
+                ParamException.class,
+                () -> adminController.getAdminProfile(buildViewAdminProfileRequest("   "))
+        );
+
+        assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
+        verify(adminService, never()).getAdminById(any(AdminProfileQuery.class));
+    }
+
+    @Test
+    @DisplayName("getAdminProfile fails when id is invalid text")
+    void getAdminProfile_nonNumericId_fails() {
+        ParamException exception = assertThrows(
+                ParamException.class,
+                () -> adminController.getAdminProfile(buildViewAdminProfileRequest("abc"))
+        );
+
+        assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
+        verify(adminService, never()).getAdminById(any(AdminProfileQuery.class));
+    }
+
+    @Test
+    @DisplayName("getAdminProfile fails when admin id is not found")
+    void getAdminProfile_unknownId_fails() {
+        when(adminService.getAdminById(any(AdminProfileQuery.class)))
+                .thenThrow(new BizException(BizErrorCode.ADMIN_NOT_FOUND_MAPPING, 999L));
+
+        BizException exception = assertThrows(
+                BizException.class,
+                () -> adminController.getAdminProfile(buildViewAdminProfileRequest("999"))
+        );
+
+        assertEquals(BizErrorCode.ADMIN_NOT_FOUND_MAPPING, exception.getErrorType());
+        AdminProfileQuery query = captureAdminProfileQuery();
+        assertEquals(999L, query.getAdminId().getId());
     }
 
     @Test
@@ -235,6 +298,12 @@ class AdminControllerTest {
         return buildEditAdminProfileRequest(ADMIN_ID, NICKNAME, PROFILE_PICTURE_URL);
     }
 
+    private ViewAdminProfileRequest buildViewAdminProfileRequest(String id) {
+        ViewAdminProfileRequest request = new ViewAdminProfileRequest();
+        request.id = id;
+        return request;
+    }
+
     private EditAdminProfileRequest buildEditAdminProfileRequest(Long id,
                                                                  String nickname,
                                                                  String profilePictureUrl) {
@@ -257,9 +326,19 @@ class AdminControllerTest {
         return queryCaptor.getValue();
     }
 
+    private AdminProfileQuery captureAdminProfileQuery() {
+        ArgumentCaptor<AdminProfileQuery> queryCaptor = ArgumentCaptor.forClass(AdminProfileQuery.class);
+        verify(adminService).getAdminById(queryCaptor.capture());
+        return queryCaptor.getValue();
+    }
+
     private String buildProfilePictureUrlOfLength(int length) {
         String prefix = "https://example.com/";
         String suffix = ".jpg";
         return prefix + "a".repeat(length - prefix.length() - suffix.length()) + suffix;
+    }
+
+    private Admin buildAdmin() {
+        return new Admin(ADMIN_ID, "test-admin", NICKNAME, PROFILE_PICTURE_URL);
     }
 }

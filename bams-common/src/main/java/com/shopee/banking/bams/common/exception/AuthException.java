@@ -1,6 +1,6 @@
-package com.shopee.banking.bams.common;
+package com.shopee.banking.bams.common.exception;
 
-import com.shopee.banking.bams.common.enums.AuthErrorCode;
+import com.shopee.banking.bams.common.exception.enums.AuthErrorCode;
 
 public class AuthException extends BaseException{
     public AuthException(AuthErrorCode errorType){

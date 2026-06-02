@@ -1,4 +1,4 @@
-package com.shopee.banking.bams.common;
+package com.shopee.banking.bams.common.exception;
 
 import lombok.Getter;
 

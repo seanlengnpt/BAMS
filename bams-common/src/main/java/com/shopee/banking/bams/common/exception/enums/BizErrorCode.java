@@ -1,6 +1,6 @@
-package com.shopee.banking.bams.common.enums;
+package com.shopee.banking.bams.common.exception.enums;
 
-import com.shopee.banking.bams.common.ErrorType;
+import com.shopee.banking.bams.common.exception.ErrorType;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

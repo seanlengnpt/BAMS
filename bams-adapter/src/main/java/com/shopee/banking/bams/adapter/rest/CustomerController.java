@@ -8,7 +8,7 @@ import com.shopee.banking.bams.api.api.response.CreateCustomersByCsvResponse;
 import com.shopee.banking.bams.api.api.response.ViewCustomerProfileResponse;
 import com.shopee.banking.bams.app.service.ICustomerService;
 import com.shopee.banking.bams.app.service.dto.CreateCustomerByCsvResult;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.common.util.ValidationUtils;
@@ -44,7 +44,7 @@ public class CustomerController {
     @PostMapping("/export-csv")
     public Result<String> exportCsvByDates(@RequestBody ExportCSVByDatesRequest request){
         ValidationUtils.validate(request);
-        Asserter.assertTrue(request.getStartDate().isBefore(request.getEndDate()), ParamErrorCode.INVALID_PARAM, "startDate, endDate");
+        Asserter.assertTrue(!request.getStartDate().isAfter(request.getEndDate()), ParamErrorCode.INVALID_PARAM, "startDate, endDate");
         String csvFilePath = customerService.exportCustomersByDates(request.getStartDate(), request.getEndDate());
         return Result.success(csvFilePath);
     }

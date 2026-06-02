@@ -2,15 +2,14 @@ package com.shopee.banking.bams.app.service.impl;
 
 import com.shopee.banking.bams.app.service.ICustomerService;
 import com.shopee.banking.bams.app.service.dto.CreateCustomerByCsvResult;
-import com.shopee.banking.bams.common.BizException;
-import com.shopee.banking.bams.common.DependencyException;
-import com.shopee.banking.bams.common.enums.BizErrorCode;
-import com.shopee.banking.bams.common.enums.DependencyErrorCode;
-import com.shopee.banking.bams.common.enums.Gender;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.BizException;
+import com.shopee.banking.bams.common.exception.DependencyException;
+import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
+import com.shopee.banking.bams.common.exception.enums.Gender;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
-import com.shopee.banking.bams.domain.enums.CustomerGender;
 import com.shopee.banking.bams.infra.dal.repository.impl.CustomerRepositoryImpl;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -250,7 +249,7 @@ public class CustomerServiceImpl implements ICustomerService {
     }
 
     private boolean isValidGender(String gender) {
-        for (CustomerGender customerGender : CustomerGender.values()) {
+        for (Gender customerGender : Gender.values()) {
             if (customerGender.name().equals(gender)) {
                 return true;
             }

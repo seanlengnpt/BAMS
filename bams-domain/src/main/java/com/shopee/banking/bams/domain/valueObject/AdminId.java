@@ -1,6 +1,7 @@
 package com.shopee.banking.bams.domain.valueObject;
 
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.ParamException;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import lombok.Getter;
 import com.shopee.banking.bams.common.util.Asserter;
 
@@ -17,8 +18,12 @@ public class AdminId {
     }
 
     public AdminId(String id){
-        Long longId = Long.parseLong(id);
-        Asserter.assertNotNull(longId, ParamErrorCode.NULL_PARAM);
-        this.id = longId;
+        try {
+            Long longId = Long.parseLong(id);
+            Asserter.assertNotNull(longId, ParamErrorCode.NULL_PARAM);
+            this.id = longId;
+        } catch (NumberFormatException e) {
+            throw new ParamException(ParamErrorCode.INVALID_PARAM, "id");
+        }
     }
 }

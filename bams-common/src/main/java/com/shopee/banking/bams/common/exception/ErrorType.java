@@ -1,4 +1,4 @@
-package com.shopee.banking.bams.common;
+package com.shopee.banking.bams.common.exception;
 
 public interface ErrorType {
     int getCode();

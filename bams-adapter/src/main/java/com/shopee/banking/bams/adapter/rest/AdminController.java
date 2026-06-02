@@ -7,7 +7,7 @@ import com.shopee.banking.bams.api.api.response.ViewAdminProfileResponse;
 import com.shopee.banking.bams.app.service.IAdminService;
 import com.shopee.banking.bams.app.service.IAuthService;
 import com.shopee.banking.bams.adapter.converter.QueryBuilder;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Admin;
@@ -26,9 +26,6 @@ public class AdminController {
     @Autowired
     private IAdminService adminService;
 
-    @Autowired
-    private IAuthService authService;
-
     @PostMapping("/view-profile")
     public Result<ViewAdminProfileResponse> getAdminProfile(@RequestBody ViewAdminProfileRequest request){
 
@@ -41,7 +38,6 @@ public class AdminController {
     public Result<ViewAdminProfileResponse> editAdminProfile(@RequestBody EditAdminProfileRequest request) {
         ValidationUtils.validate(request);
         Asserter.assertTrue(!(request.getNickname()==null && request.getProfilePictureUrl()==null), ParamErrorCode.NULL_PARAM);
-        System.out.println("reached here");
         adminService.editAdminProfile(QueryBuilder.build(request));
         return Result.success();
     }

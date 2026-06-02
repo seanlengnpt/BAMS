@@ -1,6 +1,6 @@
 package com.shopee.banking.bams.domain.valueObject;
 
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import lombok.Getter;
 import lombok.Setter;

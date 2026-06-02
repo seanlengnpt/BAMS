@@ -1,8 +1,8 @@
-package com.shopee.banking.bams.common;
+package com.shopee.banking.bams.common.exception;
 
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 
-public class ParamException extends BaseException{
+public class ParamException extends BaseException {
     public ParamException(ParamErrorCode errorType){
         super(errorType);
     }

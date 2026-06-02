@@ -1,11 +1,11 @@
-package com.shopee.banking.bams.common.factory;
+package com.shopee.banking.bams.common.exception.factory;
 
-import com.shopee.banking.bams.common.*;
-import com.shopee.banking.bams.common.enums.AuthErrorCode;
-import com.shopee.banking.bams.common.enums.BizErrorCode;
-import com.shopee.banking.bams.common.enums.DependencyErrorCode;
-import com.shopee.banking.bams.common.enums.ParamErrorCode;
-import com.shopee.banking.bams.common.enums.SystemErrorCode;
+import com.shopee.banking.bams.common.exception.*;
+import com.shopee.banking.bams.common.exception.enums.AuthErrorCode;
+import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
+import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
+import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
+import com.shopee.banking.bams.common.exception.enums.SystemErrorCode;
 
 public class ExceptionFactory {
     public static void throwException(ErrorType errorType){
