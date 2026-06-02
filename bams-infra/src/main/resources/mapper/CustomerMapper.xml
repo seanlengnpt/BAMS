@@ -40,6 +40,7 @@
         FROM ${tableName}
         WHERE created_at BETWEEN #{startDate} AND #{endDate}
         ORDER BY created_at ASC
+        LIMIT 1000 OFFSET #{offset}
     </select>
 
     <insert id="batchInsert">

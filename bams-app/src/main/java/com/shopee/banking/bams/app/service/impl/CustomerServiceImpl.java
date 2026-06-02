@@ -43,6 +43,7 @@ public class CustomerServiceImpl implements ICustomerService {
     private static final int ACCOUNT_NUMBER_LENGTH = 10;
     private static final int MAX_NAME_LENGTH = 250;
     private static final int MAX_CSV_ROWS = 10000;
+    private static final int MAX_EXPORT_ROWS = 10000;
     private static final int BATCH_SIZE = 500;
     private static final String INVALID_HEADER_ERROR = "Invalid CSV header.";
     private static final String INVALID_ACCOUNT_NUMBER_ERROR = "Invalid account number.";
@@ -98,7 +99,7 @@ public class CustomerServiceImpl implements ICustomerService {
     public String exportCustomersByDates(LocalDateTime startDate, LocalDateTime endDate) {
         Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, "startDate");
         Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, "endDate");
-        List<Customer> customers = customerRepository.selectCustomersByDates(startDate, endDate);
+        List<Customer> customers = customerRepository.selectCustomersByDates(startDate, endDate, MAX_EXPORT_ROWS);
         return writeCustomersToCsv(customers);
     }
 

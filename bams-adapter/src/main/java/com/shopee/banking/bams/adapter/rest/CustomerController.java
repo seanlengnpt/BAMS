@@ -44,7 +44,7 @@ public class CustomerController {
     @PostMapping("/export-csv")
     public Result<String> exportCsvByDates(@RequestBody ExportCSVByDatesRequest request){
         ValidationUtils.validate(request);
-        Asserter.assertTrue(request.getStartDate().isBefore(request.getEndDate()), ParamErrorCode.INVALID_PARAM, "start_date, end_date");
+        Asserter.assertTrue(request.getStartDate().isBefore(request.getEndDate()), ParamErrorCode.INVALID_PARAM, "startDate, endDate");
         String csvFilePath = customerService.exportCustomersByDates(request.getStartDate(), request.getEndDate());
         return Result.success(csvFilePath);
     }

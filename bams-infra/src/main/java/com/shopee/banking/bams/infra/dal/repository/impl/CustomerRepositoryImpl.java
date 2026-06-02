@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 public class CustomerRepositoryImpl implements ICustomerRepository {
     private static final int CUSTOMER_SHARD_COUNT = 10;
     private static final String CUSTOMER_SHARD_TABLE_PREFIX = "customers_";
+    private static final int SHARD_FETCH_SIZE = 1000;
 
     @Autowired
     private CustomerMapper customerMapper;
@@ -48,21 +49,23 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
         }
     }
 
-
-    public List<Customer> selectCustomersByDates(LocalDateTime startDate, LocalDateTime endDate) {
-        Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, startDate);
-        Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, endDate);
+    @Override
+    public List<Customer> selectCustomersByDates(LocalDateTime startDate, LocalDateTime endDate, int numRows) {
+        Asserter.assertNotNull(startDate, ParamErrorCode.NULL_PARAM, "startDate");
+        Asserter.assertNotNull(endDate, ParamErrorCode.NULL_PARAM, "endDate");
+        Asserter.assertTrue(!startDate.isAfter(endDate), ParamErrorCode.INVALID_PARAM, "startDate, endDate");
+        Asserter.assertTrue(numRows > 0, ParamErrorCode.INVALID_PARAM, "numRows");
         try{
             List<List<Customer>> shardCustomerLists = new ArrayList<>(CUSTOMER_SHARD_COUNT);
             for (int shardIndex = 0; shardIndex < CUSTOMER_SHARD_COUNT; shardIndex++) {
-                String tableName = CUSTOMER_SHARD_TABLE_PREFIX + shardIndex;
-                List<CustomerDO> customerDOs = customerMapper.selectCustomersByDates(tableName, startDate, endDate);
-                List<Customer> customers = customerDOs.stream()
-                        .map(customerDataConverter::toEntity)
-                        .toList();
-                shardCustomerLists.add(customers);
+                shardCustomerLists.add(refillCustomersInShard(
+                        getShardTableName(shardIndex),
+                        startDate,
+                        endDate,
+                        0
+                ));
             }
-            return mergeSortedCustomerLists(shardCustomerLists);
+            return mergeSortedCustomerLists(shardCustomerLists, startDate, endDate, numRows);
         }catch(Throwable e){
             throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, "Select customers by " + startDate + " , " + endDate);
         }
@@ -95,22 +98,42 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
         }
     }
 
-    private List<Customer> mergeSortedCustomerLists(List<List<Customer>> shardCustomerLists) {
-        List<Customer> result = new ArrayList<>();
+    private List<Customer> refillCustomersInShard(String tableName,
+                                                  LocalDateTime startDate,
+                                                  LocalDateTime endDate,
+                                                  int offset) {
+        List<CustomerDO> customerDOs = customerMapper.selectCustomersByDates(tableName, startDate, endDate, offset);
+        List<Customer> customers = new ArrayList<>(customerDOs.size());
+        for (CustomerDO customerDO : customerDOs) {
+            customers.add(customerDataConverter.toEntity(customerDO));
+        }
+        return customers;
+    }
+
+    private List<Customer> mergeSortedCustomerLists(List<List<Customer>> shardCustomerLists,
+                                                    LocalDateTime startDate,
+                                                    LocalDateTime endDate,
+                                                    int maxCustomers) {
+        List<Customer> result = new ArrayList<>(Math.min(maxCustomers, SHARD_FETCH_SIZE));
         PriorityQueue<CustomerCursor> minHeap = new PriorityQueue<>(
                 Comparator.comparing(cursor -> cursor.customer().getCreatedAt())
         );
+        int[] shardOffsets = new int[shardCustomerLists.size()];
 
         for (int shardIndex = 0; shardIndex < shardCustomerLists.size(); shardIndex++) {
             List<Customer> shardCustomers = shardCustomerLists.get(shardIndex);
+            shardOffsets[shardIndex] = shardCustomers.size();
             if (!shardCustomers.isEmpty()) {
                 minHeap.offer(new CustomerCursor(shardCustomers.get(0), shardIndex, 0));
             }
         }
 
-        while (!minHeap.isEmpty()) {
+        while (!minHeap.isEmpty() && result.size() < maxCustomers) {
             CustomerCursor earliest = minHeap.poll();
             result.add(earliest.customer());
+            if (result.size() >= maxCustomers) {
+                break;
+            }
 
             int nextCustomerIndex = earliest.customerIndex() + 1;
             List<Customer> shardCustomers = shardCustomerLists.get(earliest.shardIndex());
@@ -120,10 +143,27 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
                         earliest.shardIndex(),
                         nextCustomerIndex
                 ));
+            } else {
+                int shardIndex = earliest.shardIndex();
+                List<Customer> refilledCustomers = refillCustomersInShard(
+                        getShardTableName(shardIndex),
+                        startDate,
+                        endDate,
+                        shardOffsets[shardIndex]
+                );
+                shardCustomerLists.set(shardIndex, refilledCustomers);
+                shardOffsets[shardIndex] += refilledCustomers.size();
+                if (!refilledCustomers.isEmpty()) {
+                    minHeap.offer(new CustomerCursor(refilledCustomers.get(0), shardIndex, 0));
+                }
             }
         }
 
         return result;
+    }
+
+    private String getShardTableName(int shardIndex) {
+        return CUSTOMER_SHARD_TABLE_PREFIX + shardIndex;
     }
 
     private record CustomerCursor(
