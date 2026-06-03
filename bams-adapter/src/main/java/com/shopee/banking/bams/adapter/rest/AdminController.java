@@ -3,9 +3,9 @@ package com.shopee.banking.bams.adapter.rest;
 import com.shopee.banking.bams.adapter.converter.ResponseAssembler;
 import com.shopee.banking.bams.api.api.request.EditAdminProfileRequest;
 import com.shopee.banking.bams.api.api.request.ViewAdminProfileRequest;
+import com.shopee.banking.bams.api.api.response.EditAdminProfileResponse;
 import com.shopee.banking.bams.api.api.response.ViewAdminProfileResponse;
 import com.shopee.banking.bams.app.service.IAdminService;
-import com.shopee.banking.bams.app.service.IAuthService;
 import com.shopee.banking.bams.adapter.converter.QueryBuilder;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
@@ -35,10 +35,10 @@ public class AdminController {
     }
 
     @PostMapping
-    public Result<ViewAdminProfileResponse> editAdminProfile(@RequestBody EditAdminProfileRequest request) {
+    public Result<EditAdminProfileResponse> editAdminProfile(@RequestBody EditAdminProfileRequest request) {
         ValidationUtils.validate(request);
-        Asserter.assertTrue(!(request.getNickname()==null && request.getProfilePictureUrl()==null), ParamErrorCode.NULL_PARAM);
-        adminService.editAdminProfile(QueryBuilder.build(request));
-        return Result.success();
+        Asserter.assertTrue(!(request.getNickname() == null && request.getProfilePictureUrl() == null), ParamErrorCode.NULL_PARAM);
+        int modifiedCount = adminService.editAdminProfile(QueryBuilder.build(request));
+        return Result.success(new EditAdminProfileResponse(modifiedCount));
     }
 }

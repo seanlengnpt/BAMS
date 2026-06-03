@@ -64,6 +64,32 @@ class AdminRepositoryImplTest {
     }
 
     @Test
+    @DisplayName("selectByIdForUpdate returns admin when id is valid")
+    void selectByIdForUpdate_validAdminId_returnsAdmin() {
+        AdminId adminId = buildAdminId();
+        AdminDO adminDO = buildAdminDO();
+        Admin expectedAdmin = buildAdmin();
+        when(adminMapper.selectByIdForUpdate(adminId.getId())).thenReturn(adminDO);
+        when(adminDataConverter.toEntity(adminDO)).thenReturn(expectedAdmin);
+
+        Admin actualAdmin = adminRepository.selectByIdForUpdate(adminId);
+
+        assertSame(expectedAdmin, actualAdmin);
+        verify(adminMapper, times(1)).selectByIdForUpdate(adminId.getId());
+        verify(adminDataConverter, times(1)).toEntity(adminDO);
+    }
+
+    @Test
+    @DisplayName("selectByIdForUpdate fails when admin id is null")
+    void selectByIdForUpdate_nullAdminId_fails() {
+        ParamException exception = assertThrows(ParamException.class, () -> adminRepository.selectByIdForUpdate(null));
+
+        assertEquals(ParamErrorCode.NULL_PARAM, exception.getErrorType());
+        verifyNoInteractions(adminMapper);
+        verifyNoInteractions(adminDataConverter);
+    }
+
+    @Test
     @DisplayName("queryById fails when admin id is null")
     void queryById_nullAdminId_fails() {
         ParamException exception = assertThrows(ParamException.class, () -> adminRepository.queryById(null));
@@ -190,6 +216,12 @@ class AdminRepositoryImplTest {
                              String username,
                              String nickname,
                              String profilePictureUrl) {
-        return new Admin(id, hashedPassword, username, nickname, profilePictureUrl);
+        return Admin.builder()
+                .id(id)
+                .hashedPassword(hashedPassword)
+                .username(username)
+                .adminNickname(nickname)
+                .adminProfilePictureUrl(profilePictureUrl)
+                .build();
     }
 }

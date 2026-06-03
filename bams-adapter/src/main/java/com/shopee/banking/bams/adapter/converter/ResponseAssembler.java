@@ -15,9 +15,12 @@ public class ResponseAssembler {
         }
         ViewAdminProfileResponse response = new ViewAdminProfileResponse();
         response.setId(admin.getId());
+        response.setVersion(admin.getVersion());
         response.setNickname(admin.getAdminNickname());
         response.setUsername(admin.getUsername());
         response.setProfilePictureUrl(admin.getAdminProfilePictureUrl());
+        response.setCreatedAt(admin.getCreatedAt());
+        response.setModifiedAt(admin.getModifiedAt());
         return response;
     }
 
@@ -61,5 +64,4 @@ public class ResponseAssembler {
         }
         return new CreateCustomersByCsvResponse(result.getModifiedCount());
     }
-
 }

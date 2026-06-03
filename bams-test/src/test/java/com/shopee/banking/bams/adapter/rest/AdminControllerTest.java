@@ -2,6 +2,7 @@ package com.shopee.banking.bams.adapter.rest;
 
 import com.shopee.banking.bams.api.api.request.EditAdminProfileRequest;
 import com.shopee.banking.bams.api.api.request.ViewAdminProfileRequest;
+import com.shopee.banking.bams.api.api.response.EditAdminProfileResponse;
 import com.shopee.banking.bams.api.api.response.ViewAdminProfileResponse;
 import com.shopee.banking.bams.app.service.IAdminService;
 import com.shopee.banking.bams.app.service.dto.query.AdminProfileQuery;
@@ -21,6 +22,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -34,8 +37,11 @@ import static org.mockito.Mockito.when;
 class AdminControllerTest {
 
     private static final Long ADMIN_ID = 1L;
+    private static final Long VERSION = 0L;
     private static final String NICKNAME = "test nickname";
     private static final String PROFILE_PICTURE_URL = "https://example.com/profile.png";
+    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2020, 5, 1, 8, 30);
+    private static final LocalDateTime MODIFIED_AT = LocalDateTime.of(2020, 5, 2, 9, 45);
 
     private AdminController adminController;
 
@@ -60,9 +66,12 @@ class AdminControllerTest {
         assertEquals(Result.SUCCESS_MSG, result.getMsg());
         assertNotNull(result.getData());
         assertEquals(ADMIN_ID, result.getData().getId());
+        assertEquals(VERSION, result.getData().getVersion());
         assertEquals("test-admin", result.getData().getUsername());
         assertEquals(NICKNAME, result.getData().getNickname());
         assertEquals(PROFILE_PICTURE_URL, result.getData().getProfilePictureUrl());
+        assertEquals(CREATED_AT, result.getData().getCreatedAt());
+        assertEquals(MODIFIED_AT, result.getData().getModifiedAt());
 
         AdminProfileQuery query = captureAdminProfileQuery();
         assertEquals(ADMIN_ID, query.getAdminId().getId());
@@ -111,40 +120,47 @@ class AdminControllerTest {
     @Test
     @DisplayName("editAdminProfile succeeds with valid id, nickname, and profilePictureUrl")
     void editAdminProfile_validIdNicknameAndProfilePictureUrl_succeeds() {
-        Result<?> result = adminController.editAdminProfile(buildEditAdminProfileRequest());
+        when(adminService.editAdminProfile(any(EditAdminProfileQuery.class))).thenReturn(1);
+
+        Result<EditAdminProfileResponse> result = adminController.editAdminProfile(buildEditAdminProfileRequest());
         assertSuccess(result);
         EditAdminProfileQuery query = captureEditAdminProfileQuery();
         assertEquals(ADMIN_ID, query.getAdminId().getId());
         assertEquals(NICKNAME, query.getNickname());
         assertEquals(PROFILE_PICTURE_URL, query.getProfilePictureUrl());
+        assertEquals(VERSION, query.getVersion());
     }
 
     @Test
     @DisplayName("editAdminProfile succeeds with valid id and nickname only")
     void editAdminProfile_validIdAndNicknameOnly_succeeds() {
         EditAdminProfileRequest request = buildEditAdminProfileRequest(ADMIN_ID, NICKNAME, null);
+        when(adminService.editAdminProfile(any(EditAdminProfileQuery.class))).thenReturn(1);
 
-        Result<?> result = adminController.editAdminProfile(request);
+        Result<EditAdminProfileResponse> result = adminController.editAdminProfile(request);
 
         assertSuccess(result);
         EditAdminProfileQuery query = captureEditAdminProfileQuery();
         assertEquals(ADMIN_ID, query.getAdminId().getId());
         assertEquals(NICKNAME, query.getNickname());
         assertNull(query.getProfilePictureUrl());
+        assertEquals(VERSION, query.getVersion());
     }
 
     @Test
     @DisplayName("editAdminProfile succeeds with valid id and profilePictureUrl only")
     void editAdminProfile_validIdAndProfilePictureUrlOnly_succeeds() {
         EditAdminProfileRequest request = buildEditAdminProfileRequest(ADMIN_ID, null, PROFILE_PICTURE_URL);
+        when(adminService.editAdminProfile(any(EditAdminProfileQuery.class))).thenReturn(1);
 
-        Result<?> result = adminController.editAdminProfile(request);
+        Result<EditAdminProfileResponse> result = adminController.editAdminProfile(request);
 
         assertSuccess(result);
         EditAdminProfileQuery query = captureEditAdminProfileQuery();
         assertEquals(ADMIN_ID, query.getAdminId().getId());
         assertNull(query.getNickname());
         assertEquals(PROFILE_PICTURE_URL, query.getProfilePictureUrl());
+        assertEquals(VERSION, query.getVersion());
     }
 
     @Test
@@ -226,8 +242,9 @@ class AdminControllerTest {
     void editAdminProfile_nicknameExactly50_succeeds() {
         String nickname = "a".repeat(50);
         EditAdminProfileRequest request = buildEditAdminProfileRequest(ADMIN_ID, nickname, PROFILE_PICTURE_URL);
+        when(adminService.editAdminProfile(any(EditAdminProfileQuery.class))).thenReturn(1);
 
-        Result<?> result = adminController.editAdminProfile(request);
+        Result<EditAdminProfileResponse> result = adminController.editAdminProfile(request);
 
         assertSuccess(result);
         EditAdminProfileQuery query = captureEditAdminProfileQuery();
@@ -285,8 +302,9 @@ class AdminControllerTest {
     void editAdminProfile_profilePictureUrlExactly250_succeeds() {
         String profilePictureUrl = buildProfilePictureUrlOfLength(250);
         EditAdminProfileRequest request = buildEditAdminProfileRequest(ADMIN_ID, NICKNAME, profilePictureUrl);
+        when(adminService.editAdminProfile(any(EditAdminProfileQuery.class))).thenReturn(1);
 
-        Result<?> result = adminController.editAdminProfile(request);
+        Result<EditAdminProfileResponse> result = adminController.editAdminProfile(request);
 
         assertSuccess(result);
         EditAdminProfileQuery query = captureEditAdminProfileQuery();
@@ -311,13 +329,15 @@ class AdminControllerTest {
         ReflectionTestUtils.setField(request, "id", id);
         ReflectionTestUtils.setField(request, "nickname", nickname);
         ReflectionTestUtils.setField(request, "profilePictureUrl", profilePictureUrl);
+        ReflectionTestUtils.setField(request, "version", VERSION);
         return request;
     }
 
-    private void assertSuccess(Result<?> result) {
+    private void assertSuccess(Result<EditAdminProfileResponse> result) {
         assertEquals(Result.SUCCESS_CODE, result.getCode());
         assertEquals(Result.SUCCESS_MSG, result.getMsg());
-        assertNull(result.getData());
+        assertNotNull(result.getData());
+        assertEquals(1, result.getData().getModifiedCount());
     }
 
     private EditAdminProfileQuery captureEditAdminProfileQuery() {
@@ -339,6 +359,15 @@ class AdminControllerTest {
     }
 
     private Admin buildAdmin() {
-        return new Admin(ADMIN_ID, "test-admin", NICKNAME, PROFILE_PICTURE_URL);
+        Admin admin = Admin.builder()
+                .id(ADMIN_ID)
+                .username("test-admin")
+                .adminNickname(NICKNAME)
+                .adminProfilePictureUrl(PROFILE_PICTURE_URL)
+                .createdAt(CREATED_AT)
+                .modifiedAt(MODIFIED_AT)
+                .build();
+        admin.setVersion(VERSION);
+        return admin;
     }
 }

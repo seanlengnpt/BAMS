@@ -39,6 +39,7 @@ public class AuthTokenRepositoryImpl implements IAuthTokenRepository {
         try {
             adminTokenDO = adminTokenMapper.selectByRefreshToken(refreshToken);
         } catch (Throwable e) {
+            System.out.println(e.getMessage());
             throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, refreshToken);
         }
         return adminTokenDataConverter.toEntity(adminTokenDO);

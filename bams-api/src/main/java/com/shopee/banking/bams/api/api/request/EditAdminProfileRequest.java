@@ -17,4 +17,8 @@ public class EditAdminProfileRequest extends BaseAppRequest {
 
     @Positive
     private Long id;
+
+    @NotNull
+    @PositiveOrZero
+    private Long version;
 }

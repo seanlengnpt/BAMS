@@ -10,5 +10,5 @@ public class EditAdminProfileQuery {
     private AdminId adminId;
     private String nickname;
     private String profilePictureUrl;
+    private Long version;
 }
-

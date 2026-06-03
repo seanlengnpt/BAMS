@@ -17,13 +17,20 @@
     </resultMap>
 
     <select id="selectById" resultMap="BaseResultMap">
-        SELECT id, username, password, nickname, profile_pic
+        SELECT id, username, password, nickname, profile_pic, created_at, modified_at, version
         FROM admin
         WHERE id = #{id}
     </select>
 
+    <select id="selectByIdForUpdate" resultMap="BaseResultMap">
+        SELECT id, username, password, nickname, profile_pic, version
+        FROM admin
+        WHERE id = #{id}
+        FOR UPDATE
+    </select>
+
     <select id="selectByUsername" resultMap="BaseResultMap">
-        SELECT id, username, password, nickname, profile_pic
+        SELECT id, username, password, nickname, profile_pic, version
         FROM admin
         WHERE username = #{username}
         LIMIT 1
@@ -38,6 +45,7 @@
             <if test="profilePictureUrl != null">
                 profile_pic = #{profilePictureUrl},
             </if>
+            version = version + 1,
             modified_at = NOW()
         </set>
         WHERE id = #{id}

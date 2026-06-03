@@ -8,6 +8,8 @@ import org.apache.ibatis.annotations.Param;
 public interface AdminMapper {
     AdminDO selectById(@Param("id") Long id);
 
+    AdminDO selectByIdForUpdate(@Param("id") Long id);
+
     AdminDO selectByUsername(@Param("username") String username);
 
     int updateProfile(@Param("id") Long id,

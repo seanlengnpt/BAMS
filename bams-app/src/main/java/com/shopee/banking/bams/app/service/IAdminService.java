@@ -8,5 +8,5 @@ import com.shopee.banking.bams.domain.valueObject.AdminId;
 public interface IAdminService {
     Admin getAdminById(AdminProfileQuery query);
 
-    void editAdminProfile(EditAdminProfileQuery query);
+    int editAdminProfile(EditAdminProfileQuery query);
 }

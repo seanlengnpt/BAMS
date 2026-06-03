@@ -204,7 +204,13 @@ class AuthServiceImplTest {
     }
 
     private Admin buildAdminWithPassword(String hashedPassword) {
-        return new Admin(ADMIN_ID, hashedPassword, USERNAME, "nickname", "https://example.com/avatar.png");
+        return Admin.builder()
+                .id(ADMIN_ID)
+                .hashedPassword(hashedPassword)
+                .username(USERNAME)
+                .adminNickname("nickname")
+                .adminProfilePictureUrl("https://example.com/avatar.png")
+                .build();
     }
 
     private JwtToken buildRefreshToken(String token, LocalDateTime expiresAt, boolean revoked) {

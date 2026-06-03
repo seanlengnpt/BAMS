@@ -19,6 +19,7 @@ public class QueryBuilder {
         query.setAdminId(new AdminId(request.getId()));
         query.setNickname(request.getNickname());
         query.setProfilePictureUrl(request.getProfilePictureUrl());
+        query.setVersion(request.getVersion());
         return query;
     }
 

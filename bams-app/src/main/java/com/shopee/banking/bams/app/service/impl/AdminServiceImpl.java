@@ -11,6 +11,8 @@ import com.shopee.banking.bams.domain.repository.IAdminRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 @Component
 public class AdminServiceImpl implements IAdminService {
 
@@ -25,11 +27,17 @@ public class AdminServiceImpl implements IAdminService {
     }
 
     @Override
-    public void editAdminProfile(EditAdminProfileQuery query) {
-        Admin admin = adminRepository.queryById(query.getAdminId());
+    public int editAdminProfile(EditAdminProfileQuery query) {
+        Admin admin = adminRepository.selectByIdForUpdate(query.getAdminId());
         Asserter.assertNotNull(admin, BizErrorCode.ADMIN_NOT_FOUND_MAPPING, query.getAdminId().getId());
+        Asserter.assertTrue(
+                Objects.equals(query.getVersion(), admin.getVersion()),
+                BizErrorCode.STALE_UPDATE,
+                "Admin with id " + query.getAdminId().getId()
+        );
 
         int updatedRows = adminRepository.updateProfile(query.getAdminId(), query.getNickname(), query.getProfilePictureUrl());
         Asserter.assertTrue(updatedRows == 1, ParamErrorCode.INVALID_PARAM);
+        return updatedRows;
     }
 }

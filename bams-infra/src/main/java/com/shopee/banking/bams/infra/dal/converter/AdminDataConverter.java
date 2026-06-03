@@ -1,4 +1,5 @@
 package com.shopee.banking.bams.infra.dal.converter;
+
 import com.shopee.banking.bams.domain.aggregateRoot.Admin;
 import com.shopee.banking.bams.infra.dal.dataObject.AdminDO;
 import org.springframework.stereotype.Component;
@@ -10,7 +11,17 @@ public class AdminDataConverter implements BaseDataConverter<Admin, AdminDO>{
         if (adminDO == null){
             return null;
         }
-        return new Admin(adminDO.getId(), adminDO.getPassword(), adminDO.getUsername(), adminDO.getNickname(), adminDO.getProfilePictureUrl());
+        Admin admin = Admin.builder()
+                .id(adminDO.getId())
+                .hashedPassword(adminDO.getPassword())
+                .username(adminDO.getUsername())
+                .adminNickname(adminDO.getNickname())
+                .adminProfilePictureUrl(adminDO.getProfilePictureUrl())
+                .createdAt(adminDO.getCreatedAt())
+                .modifiedAt(adminDO.getModifiedAt())
+                .build();
+        admin.setVersion(adminDO.getVersion());
+        return admin;
     }
 
     @Override

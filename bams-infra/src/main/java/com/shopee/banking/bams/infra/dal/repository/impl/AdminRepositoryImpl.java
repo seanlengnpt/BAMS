@@ -34,6 +34,18 @@ public class AdminRepositoryImpl implements IAdminRepository {
     }
 
     @Override
+    public Admin selectByIdForUpdate(AdminId id) {
+        Asserter.assertNotNull(id, ParamErrorCode.NULL_PARAM, "Admin Id");
+        AdminDO adminDO;
+        try {
+            adminDO = adminMapper.selectByIdForUpdate(id.getId());
+        } catch (Throwable e) {
+            throw new DependencyException(DependencyErrorCode.DATABASE_QUERY_FAILED, id);
+        }
+        return adminDataConverter.toEntity(adminDO);
+    }
+
+    @Override
     public Admin queryByUsername(String username) {
         Asserter.assertNotNull(username, ParamErrorCode.NULL_PARAM, "Username");
         AdminDO adminDO;

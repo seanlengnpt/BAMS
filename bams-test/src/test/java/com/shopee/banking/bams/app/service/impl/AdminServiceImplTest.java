@@ -32,6 +32,7 @@ import static org.mockito.Mockito.when;
 class AdminServiceImplTest {
 
     private static final Long ADMIN_ID = 1L;
+    private static final Long VERSION = 0L;
     private static final String USERNAME = "test-admin";
     private static final String NICKNAME = "test-nickname";
     private static final String PROFILE_PICTURE_URL = "https://example.com/profile.png";
@@ -77,14 +78,15 @@ class AdminServiceImplTest {
     void editAdminProfile_adminExistsAndUpdateReturnsOne_succeeds() {
         EditAdminProfileQuery query = buildEditAdminProfileQuery();
         AdminId adminId = query.getAdminId();
-        when(adminRepository.queryById(adminId)).thenReturn(buildAdmin());
+        when(adminRepository.selectByIdForUpdate(adminId)).thenReturn(buildAdmin());
         when(adminRepository.updateProfile(adminId, NICKNAME, PROFILE_PICTURE_URL)).thenReturn(1);
 
-        assertDoesNotThrow(() -> adminService.editAdminProfile(query));
+        int updatedRows = adminService.editAdminProfile(query);
 
         InOrder inOrder = inOrder(adminRepository);
-        inOrder.verify(adminRepository).queryById(adminId);
+        inOrder.verify(adminRepository).selectByIdForUpdate(adminId);
         inOrder.verify(adminRepository).updateProfile(adminId, NICKNAME, PROFILE_PICTURE_URL);
+        assertEquals(1, updatedRows);
         verify(adminRepository, times(1)).updateProfile(adminId, NICKNAME, PROFILE_PICTURE_URL);
     }
 
@@ -92,7 +94,7 @@ class AdminServiceImplTest {
     @DisplayName("editAdminProfile fails when admin does not exist")
     void editAdminProfile_adminDoesNotExist_fails() {
         EditAdminProfileQuery query = buildEditAdminProfileQuery();
-        when(adminRepository.queryById(query.getAdminId())).thenReturn(null);
+        when(adminRepository.selectByIdForUpdate(query.getAdminId())).thenReturn(null);
 
         BizException exception = assertThrows(BizException.class, () -> adminService.editAdminProfile(query));
 
@@ -105,7 +107,7 @@ class AdminServiceImplTest {
     void editAdminProfile_updateReturnsZero_fails() {
         EditAdminProfileQuery query = buildEditAdminProfileQuery();
         AdminId adminId = query.getAdminId();
-        when(adminRepository.queryById(adminId)).thenReturn(buildAdmin());
+        when(adminRepository.selectByIdForUpdate(adminId)).thenReturn(buildAdmin());
         when(adminRepository.updateProfile(adminId, NICKNAME, PROFILE_PICTURE_URL)).thenReturn(0);
 
         ParamException exception = assertThrows(ParamException.class, () -> adminService.editAdminProfile(query));
@@ -134,13 +136,13 @@ class AdminServiceImplTest {
         EditAdminProfileQuery query = buildEditAdminProfileQuery(buildAdminId(), NICKNAME, null);
         AdminId adminId = query.getAdminId();
 
-        when(adminRepository.queryById(adminId)).thenReturn(buildAdmin());
+        when(adminRepository.selectByIdForUpdate(adminId)).thenReturn(buildAdmin());
         when(adminRepository.updateProfile(adminId, NICKNAME, null)).thenReturn(1);
 
         assertDoesNotThrow(() -> adminService.editAdminProfile(query));
 
         InOrder inOrder = inOrder(adminRepository);
-        inOrder.verify(adminRepository).queryById(adminId);
+        inOrder.verify(adminRepository).selectByIdForUpdate(adminId);
         inOrder.verify(adminRepository).updateProfile(adminId, NICKNAME, null);
     }
 
@@ -149,14 +151,29 @@ class AdminServiceImplTest {
     void editAdminProfile_profilePictureUrlOnly_succeeds() {
         EditAdminProfileQuery query = buildEditAdminProfileQuery(buildAdminId(), null, PROFILE_PICTURE_URL);
         AdminId adminId = query.getAdminId();
-        when(adminRepository.queryById(adminId)).thenReturn(buildAdmin());
+        when(adminRepository.selectByIdForUpdate(adminId)).thenReturn(buildAdmin());
         when(adminRepository.updateProfile(adminId, null, PROFILE_PICTURE_URL)).thenReturn(1);
 
         assertDoesNotThrow(() -> adminService.editAdminProfile(query));
 
         InOrder inOrder = inOrder(adminRepository);
-        inOrder.verify(adminRepository).queryById(adminId);
+        inOrder.verify(adminRepository).selectByIdForUpdate(adminId);
         inOrder.verify(adminRepository).updateProfile(adminId, null, PROFILE_PICTURE_URL);
+    }
+
+    @Test
+    @DisplayName("editAdminProfile fails when request version is stale")
+    void editAdminProfile_staleVersion_fails() {
+        EditAdminProfileQuery query = buildEditAdminProfileQuery();
+        AdminId adminId = query.getAdminId();
+        Admin admin = buildAdmin();
+        admin.setVersion(1L);
+        when(adminRepository.selectByIdForUpdate(adminId)).thenReturn(admin);
+
+        BizException exception = assertThrows(BizException.class, () -> adminService.editAdminProfile(query));
+
+        assertEquals(BizErrorCode.STALE_UPDATE, exception.getErrorType());
+        verify(adminRepository, never()).updateProfile(any(AdminId.class), any(), any());
     }
 
     private EditAdminProfileQuery buildEditAdminProfileQuery() {
@@ -176,6 +193,7 @@ class AdminServiceImplTest {
         query.setAdminId(adminId);
         query.setNickname(nickname);
         query.setProfilePictureUrl(profilePictureUrl);
+        query.setVersion(VERSION);
         return query;
     }
 
@@ -188,6 +206,13 @@ class AdminServiceImplTest {
     }
 
     private Admin buildAdmin(Long id, String username, String nickname, String profilePictureUrl) {
-        return new Admin(id, username, nickname, profilePictureUrl);
+        Admin admin = Admin.builder()
+                .id(id)
+                .username(username)
+                .adminNickname(nickname)
+                .adminProfilePictureUrl(profilePictureUrl)
+                .build();
+        admin.setVersion(VERSION);
+        return admin;
     }
 }
