@@ -1,6 +1,6 @@
 package com.shopee.banking.bams.infra.dal.converter;
 
-import com.shopee.banking.bams.common.exception.enums.Gender;
+import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
 import com.shopee.banking.bams.infra.dal.dataObject.CustomerDO;
 import org.springframework.stereotype.Component;

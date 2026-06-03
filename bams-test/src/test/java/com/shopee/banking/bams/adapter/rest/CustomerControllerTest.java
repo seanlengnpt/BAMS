@@ -10,7 +10,7 @@ import com.shopee.banking.bams.app.service.ICustomerService;
 import com.shopee.banking.bams.app.service.dto.CreateCustomerByCsvResult;
 import com.shopee.banking.bams.common.exception.ParamException;
 import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
-import com.shopee.banking.bams.common.exception.enums.Gender;
+import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;

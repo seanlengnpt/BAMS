@@ -6,7 +6,7 @@ import com.shopee.banking.bams.common.exception.BizException;
 import com.shopee.banking.bams.common.exception.DependencyException;
 import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
 import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
-import com.shopee.banking.bams.common.exception.enums.Gender;
+import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;

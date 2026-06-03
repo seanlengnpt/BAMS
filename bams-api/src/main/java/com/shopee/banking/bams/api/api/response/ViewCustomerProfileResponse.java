@@ -1,6 +1,6 @@
 package com.shopee.banking.bams.api.api.response;
 
-import com.shopee.banking.bams.common.exception.enums.Gender;
+import com.shopee.banking.bams.common.enums.Gender;
 import lombok.Getter;
 import lombok.Setter;
 

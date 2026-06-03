@@ -1,6 +1,6 @@
 package com.shopee.banking.bams.domain.aggregateRoot;
 
-import com.shopee.banking.bams.common.exception.enums.Gender;
+import com.shopee.banking.bams.common.enums.Gender;
 import lombok.Builder;
 import lombok.Getter;
 import java.time.LocalDateTime;
