@@ -5,12 +5,12 @@ import com.shopee.banking.bams.api.api.request.ExportCSVByDatesRequest;
 import com.shopee.banking.bams.api.api.request.ViewCustomerProfileRequest;
 import com.shopee.banking.bams.api.api.response.CreateCustomersByCsvResponse;
 import com.shopee.banking.bams.api.api.response.ViewCustomerProfileResponse;
-import com.shopee.banking.bams.common.exception.BizException;
 import com.shopee.banking.bams.app.service.ICustomerService;
 import com.shopee.banking.bams.app.service.dto.CreateCustomerByCsvResult;
+import com.shopee.banking.bams.common.enums.Gender;
+import com.shopee.banking.bams.common.exception.BizException;
 import com.shopee.banking.bams.common.exception.ParamException;
 import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
-import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.result.Result;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
@@ -37,6 +37,7 @@ import static org.mockito.Mockito.when;
 class CustomerControllerTest {
 
     private static final String CSV_FILE_PATH = "/path/to/file.csv";
+    private static final String ADMIN_ID = "21";
     private static final String EXPORT_CSV_FILE_PATH = "file-storage/exports/customers_20200102_100000.csv";
     private static final LocalDateTime START_DATE = LocalDateTime.of(2020, 5, 1, 0, 0);
     private static final LocalDateTime END_DATE = LocalDateTime.of(2020, 5, 31, 23, 59, 59);
@@ -53,23 +54,23 @@ class CustomerControllerTest {
     }
 
     @Test
-    @DisplayName("createCustomersByCsv maps request and returns modified count")
+    @DisplayName("createCustomersByCsv maps request and returns job id")
     void createCustomersByCsv_validRequest_succeeds() {
-        CreateCustomersByCsvRequest request = buildCreateCustomersByCsvRequest(CSV_FILE_PATH);
-        when(customerService.createCustomerByCSV(CSV_FILE_PATH)).thenReturn(new CreateCustomerByCsvResult(3));
+        CreateCustomersByCsvRequest request = buildCreateCustomersByCsvRequest(CSV_FILE_PATH, ADMIN_ID);
+        when(customerService.createCustomerByCsvJob(CSV_FILE_PATH, ADMIN_ID)).thenReturn(new CreateCustomerByCsvResult(3L));
 
         Result<CreateCustomersByCsvResponse> result = customerController.createCustomersByCsv(request);
 
         assertEquals(Result.SUCCESS_CODE, result.getCode());
         assertEquals(Result.SUCCESS_MSG, result.getMsg());
-        assertEquals(3, result.getData().getModifiedCount());
-        verify(customerService).createCustomerByCSV(CSV_FILE_PATH);
+        assertEquals(3L, result.getData().getJobId());
+        verify(customerService).createCustomerByCsvJob(CSV_FILE_PATH, ADMIN_ID);
     }
 
     @Test
     @DisplayName("createCustomersByCsv fails when csvFilePath is blank")
     void createCustomersByCsv_blankCsvFilePath_fails() {
-        CreateCustomersByCsvRequest request = buildCreateCustomersByCsvRequest("   ");
+        CreateCustomersByCsvRequest request = buildCreateCustomersByCsvRequest("   ", ADMIN_ID);
 
         ParamException exception = assertThrows(
                 ParamException.class,
@@ -77,7 +78,23 @@ class CustomerControllerTest {
         );
 
         assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
-        verify(customerService, never()).createCustomerByCSV(org.mockito.ArgumentMatchers.anyString());
+        verify(customerService, never()).createCustomerByCsvJob(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    @DisplayName("createCustomersByCsv propagates invalid admin id error")
+    void createCustomersByCsv_invalidAdminId_fails() {
+        CreateCustomersByCsvRequest request = buildCreateCustomersByCsvRequest(CSV_FILE_PATH, "abc");
+        when(customerService.createCustomerByCsvJob(CSV_FILE_PATH, "abc"))
+                .thenThrow(new ParamException(ParamErrorCode.INVALID_PARAM, "id"));
+
+        ParamException exception = assertThrows(
+                ParamException.class,
+                () -> customerController.createCustomersByCsv(request)
+        );
+
+        assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
+        verify(customerService).createCustomerByCsvJob(CSV_FILE_PATH, "abc");
     }
 
     @Test
@@ -201,9 +218,10 @@ class CustomerControllerTest {
         verify(customerService, never()).exportCustomersByDates(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
-    private CreateCustomersByCsvRequest buildCreateCustomersByCsvRequest(String csvFilePath) {
+    private CreateCustomersByCsvRequest buildCreateCustomersByCsvRequest(String csvFilePath, String adminId) {
         CreateCustomersByCsvRequest request = new CreateCustomersByCsvRequest();
         ReflectionTestUtils.setField(request, "csvFilePath", csvFilePath);
+        ReflectionTestUtils.setField(request, "adminId", adminId);
         return request;
     }
 

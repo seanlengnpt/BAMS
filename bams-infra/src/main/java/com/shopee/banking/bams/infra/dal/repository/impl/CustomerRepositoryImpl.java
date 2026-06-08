@@ -2,14 +2,19 @@ package com.shopee.banking.bams.infra.dal.repository.impl;
 
 import com.shopee.banking.bams.common.exception.BaseException;
 import com.shopee.banking.bams.common.exception.DependencyException;
+import com.shopee.banking.bams.common.enums.CsvJobStatus;
 import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
 import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
 import com.shopee.banking.bams.domain.repository.ICustomerRepository;
+import com.shopee.banking.bams.domain.valueObject.AdminId;
+import com.shopee.banking.bams.domain.valueObject.JobId;
 import com.shopee.banking.bams.infra.dal.converter.CustomerDataConverter;
+import com.shopee.banking.bams.infra.dal.dataObject.CsvJobDO;
 import com.shopee.banking.bams.infra.dal.dataObject.CustomerDO;
+import com.shopee.banking.bams.infra.dal.mapper.CsvJobMapper;
 import com.shopee.banking.bams.infra.dal.mapper.CustomerMapper;
 import com.shopee.banking.bams.infra.dal.sharding.CustomerShardRouter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,16 +37,65 @@ public class CustomerRepositoryImpl implements ICustomerRepository {
     private static final int CUSTOMER_SHARD_COUNT = 10;
     private static final String CUSTOMER_SHARD_TABLE_PREFIX = "customers_";
     private static final int SHARD_FETCH_SIZE = 1000;
+    private static final String JOB_TYPE_IMPORT = "import";
     private static final Pattern ACCOUNT_NUMBER_PATTERN = Pattern.compile("\\d{10}");
 
     @Autowired
     private CustomerMapper customerMapper;
 
     @Autowired
+    private CsvJobMapper csvJobMapper;
+
+    @Autowired
     private CustomerDataConverter customerDataConverter;
 
     @Autowired
     private CustomerShardRouter customerShardRouter;
+
+    @Override
+    public JobId createJob(AdminId adminId, String csvFilePath) {
+        Asserter.assertNotNull(adminId, ParamErrorCode.NULL_PARAM, "adminId");
+        Asserter.assertNotNull(csvFilePath, ParamErrorCode.NULL_PARAM, "csvFilePath");
+        Asserter.assertTrue(!csvFilePath.isBlank(), ParamErrorCode.INVALID_PARAM, "csvFilePath");
+        CsvJobDO jobDO = new CsvJobDO();
+        jobDO.setJobType(JOB_TYPE_IMPORT);
+        jobDO.setAdminId(adminId.getId());
+        jobDO.setCsvFilePath(csvFilePath);
+        jobDO.setStatus(CsvJobStatus.PENDING.name());
+        jobDO.setModifiedCount(0L);
+        try {
+            csvJobMapper.insertJob(jobDO);
+            return new JobId(jobDO.getId());
+        } catch (Throwable e) {
+            throw new DependencyException(DependencyErrorCode.DATABASE_INSERT_FAILED, "csv job");
+        }
+    }
+
+    @Override
+    public void markCsvJobSuccess(JobId jobId, int modifiedCount) {
+        Asserter.assertNotNull(jobId, ParamErrorCode.NULL_PARAM, "jobId");
+        try {
+            csvJobMapper.updateJobSuccess(jobId.getId(), modifiedCount, CsvJobStatus.SUCCESS.name());
+        } catch (Throwable e) {
+            throw new DependencyException(DependencyErrorCode.DATABASE_UPDATE_FAILED, "csv job success");
+        }
+    }
+
+    @Override
+    public void markCsvJobFail(JobId jobId, String operation, int errorCode, String errorMessage) {
+        Asserter.assertNotNull(jobId, ParamErrorCode.NULL_PARAM, "jobId");
+        Asserter.assertNotNull(operation, ParamErrorCode.NULL_PARAM, "operation");
+        try {
+            csvJobMapper.updateJobFail(
+                    jobId.getId(),
+                    CsvJobStatus.FAIL.name(),
+                    errorCode,
+                    errorMessage
+            );
+        } catch (Throwable e) {
+            throw new DependencyException(DependencyErrorCode.DATABASE_UPDATE_FAILED, operation + " csv job fail");
+        }
+    }
 
 
     @Override

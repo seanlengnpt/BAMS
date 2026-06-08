@@ -8,4 +8,7 @@ public class CreateCustomersByCsvRequest extends BaseAppRequest {
 
     @NotBlank(message = "CSV file path is required")
     private String csvFilePath;
+
+    @NotBlank(message = "Admin id is required")
+    private String adminId;
 }

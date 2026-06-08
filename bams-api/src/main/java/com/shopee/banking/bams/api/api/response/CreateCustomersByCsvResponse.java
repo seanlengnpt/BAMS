@@ -8,9 +8,9 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class CreateCustomersByCsvResponse {
-    private int modifiedCount;
+    private Long jobId;
 
-    public CreateCustomersByCsvResponse(int modifiedCount) {
-        this.modifiedCount = modifiedCount;
+    public CreateCustomersByCsvResponse(Long jobId) {
+        this.jobId = jobId;
     }
 }

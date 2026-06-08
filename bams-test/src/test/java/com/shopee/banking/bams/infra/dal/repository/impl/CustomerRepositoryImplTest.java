@@ -1,15 +1,20 @@
 package com.shopee.banking.bams.infra.dal.repository.impl;
 
+import com.shopee.banking.bams.common.enums.CsvJobStatus;
+import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.common.exception.BizException;
 import com.shopee.banking.bams.common.exception.DependencyException;
 import com.shopee.banking.bams.common.exception.ParamException;
 import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
 import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
-import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
+import com.shopee.banking.bams.domain.valueObject.AdminId;
+import com.shopee.banking.bams.domain.valueObject.JobId;
 import com.shopee.banking.bams.infra.dal.converter.CustomerDataConverter;
+import com.shopee.banking.bams.infra.dal.dataObject.CsvJobDO;
 import com.shopee.banking.bams.infra.dal.dataObject.CustomerDO;
+import com.shopee.banking.bams.infra.dal.mapper.CsvJobMapper;
 import com.shopee.banking.bams.infra.dal.mapper.CustomerMapper;
 import com.shopee.banking.bams.infra.dal.sharding.CustomerShardRouter;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -35,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -56,12 +63,51 @@ class CustomerRepositoryImplTest {
     @Mock
     private CustomerMapper customerMapper;
 
+    @Mock
+    private CsvJobMapper csvJobMapper;
+
     @BeforeEach
     void setUp() {
         customerRepository = new CustomerRepositoryImpl();
         ReflectionTestUtils.setField(customerRepository, "customerMapper", customerMapper);
+        ReflectionTestUtils.setField(customerRepository, "csvJobMapper", csvJobMapper);
         ReflectionTestUtils.setField(customerRepository, "customerDataConverter", new CustomerDataConverter());
         ReflectionTestUtils.setField(customerRepository, "customerShardRouter", CUSTOMER_SHARD_ROUTER);
+    }
+
+    @Test
+    @DisplayName("createJob persists pending csv job and returns generated id")
+    void createJob_validAdminId_returnsJobId() {
+        when(csvJobMapper.insertJob(any(CsvJobDO.class))).thenAnswer(invocation -> {
+            CsvJobDO job = invocation.getArgument(0);
+            job.setId(55L);
+            return 1;
+        });
+
+        JobId jobId = customerRepository.createJob(new AdminId(21L), "/storage/customers.csv");
+
+        assertEquals(55L, jobId.getId());
+        ArgumentCaptor<CsvJobDO> jobCaptor = ArgumentCaptor.forClass(CsvJobDO.class);
+        verify(csvJobMapper).insertJob(jobCaptor.capture());
+        assertEquals("import", jobCaptor.getValue().getJobType());
+        assertEquals("/storage/customers.csv", jobCaptor.getValue().getCsvFilePath());
+        assertEquals(21L, jobCaptor.getValue().getAdminId());
+    }
+
+    @Test
+    @DisplayName("markCsvJobSuccess updates success status and modified count")
+    void markCsvJobSuccess_updatesJob() {
+        customerRepository.markCsvJobSuccess(new JobId(3L), 9);
+
+        verify(csvJobMapper).updateJobSuccess(3L, 9, CsvJobStatus.SUCCESS.name());
+    }
+
+    @Test
+    @DisplayName("markCsvJobFail updates fail status and error fields")
+    void markCsvJobFail_updatesJob() {
+        customerRepository.markCsvJobFail(new JobId(4L), "import", 40005, "Invalid csv file");
+
+        verify(csvJobMapper).updateJobFail(4L, CsvJobStatus.FAIL.name(), 40005, "Invalid csv file");
     }
 
     @Test

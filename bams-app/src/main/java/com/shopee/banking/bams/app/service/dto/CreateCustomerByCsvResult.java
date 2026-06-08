@@ -6,5 +6,5 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public class CreateCustomerByCsvResult {
-    private int modifiedCount;
+    private Long jobId;
 }

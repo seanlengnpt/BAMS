@@ -30,6 +30,11 @@ bams:
       secret: local-development-bams-auth-secret-change-me
       access-token-ttl-seconds: 900
       refresh-token-ttl-seconds: 604800
+  mq:
+    admin-message:
+      consumer-enabled: true
+      topic: bams-admin-message-topic
+      consumer-group: bams-admin-message-consumer
 
 logging:
   level:
@@ -38,3 +43,10 @@ logging:
     org.mybatis: DEBUG
     org.apache.shardingsphere: DEBUG
     com.zaxxer.hikari: DEBUG
+
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: bams-admin-message-producer
+
+

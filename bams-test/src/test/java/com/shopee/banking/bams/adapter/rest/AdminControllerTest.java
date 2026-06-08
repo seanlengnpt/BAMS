@@ -48,7 +48,6 @@ class AdminControllerTest {
     @Mock
     private IAdminService adminService;
 
-
     @BeforeEach
     void setUp() {
         adminController = new AdminController();

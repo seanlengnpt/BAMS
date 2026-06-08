@@ -26,6 +26,7 @@ public class AdminServiceImpl implements IAdminService {
         return admin;
     }
 
+
     @Override
     public int editAdminProfile(EditAdminProfileQuery query) {
         Admin admin = adminRepository.selectByIdForUpdate(query.getAdminId());

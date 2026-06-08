@@ -2,6 +2,7 @@ package com.shopee.banking.bams.app.service.impl;
 
 import com.shopee.banking.bams.app.service.ICustomerService;
 import com.shopee.banking.bams.app.service.dto.CreateCustomerByCsvResult;
+import com.shopee.banking.bams.common.exception.BaseException;
 import com.shopee.banking.bams.common.exception.BizException;
 import com.shopee.banking.bams.common.exception.DependencyException;
 import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
@@ -10,11 +11,15 @@ import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.common.util.Asserter;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
+import com.shopee.banking.bams.domain.valueObject.AdminId;
+import com.shopee.banking.bams.domain.valueObject.JobId;
 import com.shopee.banking.bams.infra.dal.repository.impl.CustomerRepositoryImpl;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +35,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -57,13 +63,36 @@ public class CustomerServiceImpl implements ICustomerService {
     @Autowired
     private CustomerRepositoryImpl customerRepository;
 
+    @Autowired
+    @Qualifier("csvJobExecutor")
+    private Executor csvJobExecutor;
+
+    @Autowired
+    @Lazy
+    private ICustomerService customerServiceProxy;
+
     @Override
-    @Transactional
-    public CreateCustomerByCsvResult createCustomerByCSV(String csvFilePath){
+    public CreateCustomerByCsvResult createCustomerByCsvJob(String csvFilePath, String adminId){
         Asserter.assertNotNull(csvFilePath, ParamErrorCode.NULL_PARAM);
         Asserter.assertTrue(!csvFilePath.isBlank(), ParamErrorCode.INVALID_PARAM, "csvFilePath");
+        Asserter.assertNotNull(adminId, ParamErrorCode.NULL_PARAM, "adminId");
+        Asserter.assertTrue(!adminId.isBlank(), ParamErrorCode.INVALID_PARAM, "adminId");
         Path csvPath = validateCsvFileExists(csvFilePath);
+        AdminId validatedAdminId = new AdminId(adminId);
+        JobId jobId = customerRepository.createJob(validatedAdminId, csvFilePath);
+        csvJobExecutor.execute(() -> {
+            try {
+                customerServiceProxy.processCsvJob(jobId, csvPath);
+            } catch (Throwable throwable) {
+                markCsvJobFail(jobId, throwable);
+            }
+        });
+        return new CreateCustomerByCsvResult(jobId.getId());
+    }
 
+    @Override
+    @Transactional
+    public void processCsvJob(JobId jobId, Path csvPath) {
         List<CsvValidationError> errors = validateCsvEntries(csvPath);
         Asserter.assertTrue(errors.isEmpty(), BizErrorCode.INVALID_CSV_FILE, errors);
 
@@ -88,7 +117,7 @@ public class CustomerServiceImpl implements ICustomerService {
         } catch (IOException e) {
             throw new BizException(BizErrorCode.INVALID_CSV_FILEPATH);
         }
-        return new CreateCustomerByCsvResult(modifiedCount);
+        customerRepository.markCsvJobSuccess(jobId, modifiedCount);
     }
 
     @Override
@@ -296,5 +325,27 @@ public class CustomerServiceImpl implements ICustomerService {
         public String toString() {
             return "Line " + lineNumber +  ": " + message;
         }
+    }
+
+    private void markCsvJobFail(JobId jobId, Throwable throwable) {
+        int errorCode;
+        String errorMessage;
+        if (throwable instanceof BaseException baseException) {
+            errorCode = baseException.getErrorType().getCode();
+            errorMessage = baseException.getMessage();
+        } else {
+            errorCode = DependencyErrorCode.DATABASE_UPDATE_FAILED.getCode();
+            errorMessage = throwable.getMessage() == null
+                    ? DependencyErrorCode.DATABASE_UPDATE_FAILED.getMsg()
+                    : throwable.getMessage();
+        }
+        customerRepository.markCsvJobFail(jobId, "import", errorCode, truncateErrorMessage(errorMessage));
+    }
+
+    private String truncateErrorMessage(String errorMessage) {
+        if (errorMessage == null) {
+            return null;
+        }
+        return errorMessage.length() <= 150 ? errorMessage : errorMessage.substring(0, 150);
     }
 }

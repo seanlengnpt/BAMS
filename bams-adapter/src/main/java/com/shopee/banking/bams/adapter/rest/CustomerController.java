@@ -29,7 +29,10 @@ public class CustomerController {
     @PostMapping("/create-by-csv")
     public Result<CreateCustomersByCsvResponse> createCustomersByCsv(@RequestBody CreateCustomersByCsvRequest request) {
         ValidationUtils.validate(request);
-        CreateCustomerByCsvResult result = customerService.createCustomerByCSV(request.getCsvFilePath());
+        CreateCustomerByCsvResult result = customerService.createCustomerByCsvJob(
+                request.getCsvFilePath(),
+                request.getAdminId()
+        );
         CreateCustomersByCsvResponse response = ResponseAssembler.assemble(result);
         return Result.success(response);
     }

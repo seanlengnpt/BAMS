@@ -2,14 +2,16 @@ package com.shopee.banking.bams.app.service.impl;
 
 import com.shopee.banking.bams.app.service.ICustomerService;
 import com.shopee.banking.bams.app.service.dto.CreateCustomerByCsvResult;
+import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.common.exception.BizException;
 import com.shopee.banking.bams.common.exception.DependencyException;
 import com.shopee.banking.bams.common.exception.ParamException;
 import com.shopee.banking.bams.common.exception.enums.BizErrorCode;
 import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
-import com.shopee.banking.bams.common.enums.Gender;
 import com.shopee.banking.bams.common.exception.enums.ParamErrorCode;
 import com.shopee.banking.bams.domain.aggregateRoot.Customer;
+import com.shopee.banking.bams.domain.valueObject.AdminId;
+import com.shopee.banking.bams.domain.valueObject.JobId;
 import com.shopee.banking.bams.infra.dal.repository.impl.CustomerRepositoryImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +40,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -62,6 +65,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CustomerServiceImplTest {
 
+    private static final String ADMIN_ID = "21";
     private static final LocalDateTime START_DATE = LocalDateTime.of(2020, 5, 1, 0, 0);
     private static final LocalDateTime END_DATE = LocalDateTime.of(2020, 5, 31, 23, 59, 59);
     private static final Path EXPORT_DIRECTORY = Path.of("file-storage/exports");
@@ -79,6 +83,8 @@ class CustomerServiceImplTest {
     void setUp() {
         customerService = new CustomerServiceImpl();
         ReflectionTestUtils.setField(customerService, "customerRepository", customerRepository);
+        ReflectionTestUtils.setField(customerService, "csvJobExecutor", (Executor) Runnable::run);
+        ReflectionTestUtils.setField(customerService, "customerServiceProxy", customerService);
         filesBeforeTest = listExportedFilesUnchecked();
     }
 
@@ -93,11 +99,11 @@ class CustomerServiceImplTest {
     }
 
     @Test
-    @DisplayName("createCustomerByCSV fails when csvFilePath is blank")
-    void createCustomerByCSV_blankCsvFilePath_fails() {
+    @DisplayName("createCustomerByCsvJob fails when csvFilePath is blank")
+    void createCustomerByCsvJob_blankCsvFilePath_fails() {
         ParamException exception = assertThrows(
                 ParamException.class,
-                () -> customerService.createCustomerByCSV("   ")
+                () -> customerService.createCustomerByCsvJob("   ", ADMIN_ID)
         );
 
         assertEquals(ParamErrorCode.INVALID_PARAM, exception.getErrorType());
@@ -105,9 +111,9 @@ class CustomerServiceImplTest {
     }
 
     @Test
-    @DisplayName("createCustomerByCSV upserts valid CSV rows and returns modified count")
+    @DisplayName("createCustomerByCsvJob creates job, processes valid CSV, and returns job id")
     @SuppressWarnings("unchecked")
-    void createCustomerByCSV_validCsv_upsertsCustomers() throws IOException {
+    void createCustomerByCsvJob_validCsv_createsJobAndUpsertsCustomers() throws IOException {
         Path csvFile = writeCsvFile(
                 "valid-customers.csv",
                 List.of(
@@ -116,13 +122,16 @@ class CustomerServiceImplTest {
                         "1000000002,Bob Lim,M"
                 )
         );
+        when(customerRepository.createJob(any(AdminId.class), eq(csvFile.toString()))).thenReturn(new JobId(99L));
         when(customerRepository.batchUpsert(any(List.class))).thenReturn(2);
 
-        CreateCustomerByCsvResult result = customerService.createCustomerByCSV(csvFile.toString());
+        CreateCustomerByCsvResult result = customerService.createCustomerByCsvJob(csvFile.toString(), ADMIN_ID);
 
-        assertEquals(2, result.getModifiedCount());
+        assertEquals(99L, result.getJobId());
         ArgumentCaptor<List<Customer>> customerBatchCaptor = ArgumentCaptor.forClass(List.class);
         verify(customerRepository).batchUpsert(customerBatchCaptor.capture());
+        verify(customerRepository).createJob(any(AdminId.class), eq(csvFile.toString()));
+        verify(customerRepository).markCsvJobSuccess(eq(new JobId(99L)), eq(2));
         List<Customer> customers = customerBatchCaptor.getValue();
         assertEquals(2, customers.size());
         assertEquals("1000000001", customers.get(0).getAccountNumber());
@@ -134,11 +143,11 @@ class CustomerServiceImplTest {
     }
 
     @Test
-    @DisplayName("createCustomerByCSV fails when file does not exist")
-    void createCustomerByCSV_missingFile_fails() {
+    @DisplayName("createCustomerByCsvJob fails when file does not exist")
+    void createCustomerByCsvJob_missingFile_fails() {
         BizException exception = assertThrows(
                 BizException.class,
-                () -> customerService.createCustomerByCSV(tempDir.resolve("missing.csv").toString())
+                () -> customerService.createCustomerByCsvJob(tempDir.resolve("missing.csv").toString(), ADMIN_ID)
         );
 
         assertEquals(BizErrorCode.INVALID_CSV_FILEPATH, exception.getErrorType());
@@ -146,8 +155,8 @@ class CustomerServiceImplTest {
     }
 
     @Test
-    @DisplayName("createCustomerByCSV returns invalid CSV errors with line numbers")
-    void createCustomerByCSV_invalidRows_failsWithLineNumbers() throws IOException {
+    @DisplayName("createCustomerByCsvJob marks job fail when CSV rows are invalid")
+    void createCustomerByCsvJob_invalidRows_marksJobFail() throws IOException {
         Path csvFile = writeCsvFile(
                 "invalid-customers.csv",
                 List.of(
@@ -159,29 +168,28 @@ class CustomerServiceImplTest {
                         "1000000004,Evan Tan,M"
                 )
         );
+        when(customerRepository.createJob(any(AdminId.class), eq(csvFile.toString()))).thenReturn(new JobId(88L));
 
-        BizException exception = assertThrows(
-                BizException.class,
-                () -> customerService.createCustomerByCSV(csvFile.toString())
-        );
+        CreateCustomerByCsvResult result = customerService.createCustomerByCsvJob(csvFile.toString(), ADMIN_ID);
 
-        assertEquals(BizErrorCode.INVALID_CSV_FILE, exception.getErrorType());
-        assertTrue(exception.getMessage().contains("Line 2: Invalid account number."));
-        assertTrue(exception.getMessage().contains("Line 3: Invalid name."));
-        assertTrue(exception.getMessage().contains("Line 4: Invalid gender."));
-        assertTrue(exception.getMessage().contains("Line 5: Duplicate account number."));
-        assertTrue(exception.getMessage().contains("Line 6: Duplicate account number."));
-        verifyNoInteractions(customerRepository);
+        assertEquals(88L, result.getJobId());
+        ArgumentCaptor<String> errorMessageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(customerRepository).markCsvJobFail(eq(new JobId(88L)), eq("import"), eq(BizErrorCode.INVALID_CSV_FILE.getCode()), errorMessageCaptor.capture());
+        String errorMessage = errorMessageCaptor.getValue();
+        assertTrue(errorMessage.contains("Line 2: Invalid account number."));
+        assertTrue(errorMessage.contains("Line 3: Invalid name."));
+        assertTrue(errorMessage.contains("Line 4: Invalid gender."));
+        verify(customerRepository, never()).batchUpsert(any(List.class));
     }
 
     @Test
-    @DisplayName("createCustomerByCSV treats empty CSV files as invalid")
-    void createCustomerByCSV_emptyFile_fails() throws IOException {
+    @DisplayName("processCsvJob treats empty CSV files as invalid")
+    void processCsvJob_emptyFile_fails() throws IOException {
         Path csvFile = writeCsvFile("empty.csv", List.of());
 
         BizException exception = assertThrows(
                 BizException.class,
-                () -> customerService.createCustomerByCSV(csvFile.toString())
+                () -> customerService.processCsvJob(new JobId(1L), csvFile)
         );
 
         assertEquals(BizErrorCode.INVALID_CSV_FILE, exception.getErrorType());
@@ -190,9 +198,9 @@ class CustomerServiceImplTest {
     }
 
     @Test
-    @DisplayName("createCustomerByCSV rolls back the transaction when database update fails midway")
+    @DisplayName("processCsvJob rolls back the transaction when database update fails midway")
     @SuppressWarnings("unchecked")
-    void createCustomerByCSV_databaseFailure_rollsBackTransaction() throws IOException {
+    void processCsvJob_databaseFailure_rollsBackTransaction() throws IOException {
         Path csvFile = writeCsvFile("batch-failure.csv", createValidCustomerCsvLines(501));
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         TransactionStatus transactionStatus = new SimpleTransactionStatus();
@@ -204,7 +212,7 @@ class CustomerServiceImplTest {
 
         DependencyException exception = assertThrows(
                 DependencyException.class,
-                () -> transactionalCustomerService.createCustomerByCSV(csvFile.toString())
+                () -> transactionalCustomerService.processCsvJob(new JobId(7L), csvFile)
         );
 
         assertEquals(DependencyErrorCode.DATABASE_UPDATE_FAILED, exception.getErrorType());
@@ -213,6 +221,32 @@ class CustomerServiceImplTest {
         assertEquals(List.of(500, 1), customerBatchCaptor.getAllValues().stream().map(List::size).toList());
         verify(transactionManager).rollback(transactionStatus);
         verify(transactionManager, never()).commit(any());
+    }
+
+    @Test
+    @DisplayName("createCustomerByCsvJob marks job fail when processing throws dependency exception")
+    @SuppressWarnings("unchecked")
+    void createCustomerByCsvJob_databaseFailure_marksJobFail() throws IOException {
+        Path csvFile = writeCsvFile(
+                "failure.csv",
+                List.of(
+                        "account_number,name,gender",
+                        "1000000001,Alice Tan,F"
+                )
+        );
+        when(customerRepository.createJob(any(AdminId.class), eq(csvFile.toString()))).thenReturn(new JobId(100L));
+        when(customerRepository.batchUpsert(any(List.class)))
+                .thenThrow(new DependencyException(DependencyErrorCode.DATABASE_UPDATE_FAILED, "customers"));
+
+        CreateCustomerByCsvResult result = customerService.createCustomerByCsvJob(csvFile.toString(), ADMIN_ID);
+
+        assertEquals(100L, result.getJobId());
+        verify(customerRepository).markCsvJobFail(
+                eq(new JobId(100L)),
+                eq("import"),
+                eq(DependencyErrorCode.DATABASE_UPDATE_FAILED.getCode()),
+                any(String.class)
+        );
     }
 
     @Test
@@ -390,7 +424,9 @@ class CustomerServiceImplTest {
                 transactionManager,
                 new AnnotationTransactionAttributeSource()
         ));
-        return (ICustomerService) proxyFactory.getProxy();
+        ICustomerService proxy = (ICustomerService) proxyFactory.getProxy();
+        ReflectionTestUtils.setField(customerService, "customerServiceProxy", proxy);
+        return proxy;
     }
 
     private Customer buildCustomer(String accountNumber,

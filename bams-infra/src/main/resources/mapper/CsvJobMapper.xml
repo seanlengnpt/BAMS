@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shopee.banking.bams.infra.dal.mapper.CsvJobMapper">
+
+    <resultMap id="BaseResultMap" type="com.shopee.banking.bams.infra.dal.dataObject.CsvJobDO">
+        <id property="id" column="id"/>
+        <result property="jobType" column="job_type"/>
+        <result property="adminId" column="admin_id"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="csvFilePath" column="csv_file_path"/>
+        <result property="status" column="status"/>
+        <result property="modifiedCount" column="modified_count"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="errorCode" column="error_code"/>
+    </resultMap>
+
+    <insert id="insertJob" useGeneratedKeys="true" keyProperty="job.id">
+        INSERT INTO csv_jobs (job_type, admin_id, created_at, csv_file_path, status, modified_count, error_message, error_code)
+        VALUES (#{job.jobType}, #{job.adminId}, NOW(), #{job.csvFilePath}, #{job.status}, #{job.modifiedCount}, #{job.errorMessage}, #{job.errorCode})
+    </insert>
+
+    <update id="updateJobSuccess">
+        UPDATE csv_jobs
+        SET status = #{status},
+            modified_count = #{modifiedCount},
+            error_code = NULL,
+            error_message = NULL
+        WHERE id = #{jobId}
+    </update>
+
+    <update id="updateJobFail">
+        UPDATE csv_jobs
+        SET status = #{status},
+            error_code = #{errorCode},
+            error_message = #{errorMessage}
+        WHERE id = #{jobId}
+    </update>
+
+</mapper>

@@ -12,7 +12,8 @@ public enum DependencyErrorCode implements ErrorType {
     DATABASE_UPDATE_FAILED(20002, "Database update failed for {0}."),
     DATABASE_QUERY_FAILED(20003, "Database query failed for {0}."),
 
-    EXPORT_CSV_FAILED(20004, "CSV export failed for {0}");
+    EXPORT_CSV_FAILED(20004, "CSV export failed for {0}"),
+    MQ_SEND_FAILED(20005, "MQ send failed for {0}.");
 
     private final int code;
     private final String msg;
