@@ -1,7 +1,5 @@
 package com.shopee.banking.bams.infra.mq.producer;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
 import com.shopee.banking.bams.common.exception.factory.ExceptionFactory;
 import com.shopee.banking.bams.infra.mq.AdminMessageMqProperties;
@@ -14,6 +12,8 @@ import org.apache.rocketmq.spring.support.RocketMQHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Component
@@ -26,7 +26,10 @@ public class AdminMessageProducer {
 
     public void send(AdminMessage message) {
         try {
-            String payload = objectMapper.copy().findAndRegisterModules().writeValueAsString(message);
+            String payload = objectMapper.rebuild()
+                    .findAndAddModules()
+                    .build()
+                    .writeValueAsString(message);
             Message<String> mqMessage = MessageBuilder.withPayload(payload)
                     .setHeader(RocketMQHeaders.KEYS, String.valueOf(message.getAdminId()))
                     .build();
@@ -37,7 +40,7 @@ public class AdminMessageProducer {
                     message.getAdminId(),
                     sendResult.getSendStatus(),
                     sendResult.getMsgId());
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             log.error("Failed to serialize admin message. adminId={}", message.getAdminId(), exception);
             ExceptionFactory.throwException(DependencyErrorCode.MQ_SEND_FAILED, "admin-message");
         } catch (Exception exception) {

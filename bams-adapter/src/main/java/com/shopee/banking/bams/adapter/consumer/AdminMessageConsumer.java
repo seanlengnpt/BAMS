@@ -1,6 +1,5 @@
 package com.shopee.banking.bams.adapter.consumer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shopee.banking.bams.infra.mq.consumer.BaseMessageConsumer;
 import com.shopee.banking.bams.infra.mq.message.AdminMessage;
 import org.apache.rocketmq.common.message.MessageExt;
@@ -9,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 @Component
 @ConditionalOnProperty(prefix = "bams.mq.admin-message", name = "consumer-enabled", havingValue = "true", matchIfMissing = true)

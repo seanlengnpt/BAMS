@@ -37,16 +37,14 @@ bams:
       consumer-group: bams-admin-message-consumer
 
 logging:
+  config: classpath:logback/logback-spring.xml
+  file:
+    path: log
   level:
     root: INFO
-    org.springframework.jdbc: DEBUG
-    org.mybatis: DEBUG
-    org.apache.shardingsphere: DEBUG
-    com.zaxxer.hikari: DEBUG
 
 rocketmq:
   name-server: localhost:9876
   producer:
     group: bams-admin-message-producer
-
 

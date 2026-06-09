@@ -1,8 +1,6 @@
 package com.shopee.banking.bams.infra.mq.producer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shopee.banking.bams.common.exception.DependencyException;
-import com.shopee.banking.bams.common.exception.enums.DependencyErrorCode;
 import com.shopee.banking.bams.infra.mq.AdminMessageMqProperties;
 import com.shopee.banking.bams.infra.mq.message.AdminMessage;
 import org.apache.rocketmq.client.producer.SendResult;
@@ -16,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.Message;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 
@@ -77,6 +76,6 @@ class AdminMessageProducerTest {
                 () -> adminMessageProducer.send(AdminMessage.builder().adminId(1L).build())
         );
 
-        assertEquals(DependencyErrorCode.MQ_SEND_FAILED, exception.getErrorType());
+        assertEquals(20005, exception.getErrorType().getCode());
     }
 }
