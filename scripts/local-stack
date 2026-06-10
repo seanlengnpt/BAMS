@@ -1,0 +1,494 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STATE_DIR="${ROOT_DIR}/.local/local-stack"
+RUN_DIR="${STATE_DIR}/run"
+LOG_DIR="${STATE_DIR}/logs"
+
+BROKER_CONF="${ROOT_DIR}/broker.conf"
+FLUENT_BIT_DIR="${ROOT_DIR}/observability/fluent-bit"
+FLUENT_BIT_CONF="${FLUENT_BIT_DIR}/fluent-bit.conf"
+FLUENT_BIT_PID_FILE="${RUN_DIR}/fluent-bit.pid"
+FLUENT_BIT_LOG_FILE="${LOG_DIR}/fluent-bit.log"
+APP_DATA_LOG_FILE="${ROOT_DIR}/log/data.log"
+APP_ERROR_LOG_FILE="${ROOT_DIR}/log/error.log"
+
+NETWORK_NAME="bams-local-stack"
+ROCKETMQ_NAMESRV_CONTAINER="bams-rmq-namesrv"
+ROCKETMQ_BROKER_CONTAINER="bams-rmq-broker"
+VICTORIALOGS_CONTAINER="bams-victorialogs"
+
+ROCKETMQ_IMAGE="${ROCKETMQ_IMAGE:-apache/rocketmq:5.3.3}"
+VICTORIALOGS_IMAGE="${VICTORIALOGS_IMAGE:-victoriametrics/victoria-logs:v1.17.0-victorialogs}"
+
+VICTORIALOGS_HOST="${VICTORIALOGS_HOST:-127.0.0.1}"
+VICTORIALOGS_PORT="${VICTORIALOGS_PORT:-9428}"
+MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
+MYSQL_PORT="${MYSQL_PORT:-3306}"
+COLIMA_MEMORY_GB="${COLIMA_MEMORY_GB:-4}"
+COLIMA_CPU="${COLIMA_CPU:-2}"
+
+say() {
+    printf '%s\n' "$*"
+}
+
+warn() {
+    printf 'WARN: %s\n' "$*" >&2
+}
+
+die() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+ensure_state_dirs() {
+    mkdir -p "${RUN_DIR}" "${LOG_DIR}"
+}
+
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+is_pid_running() {
+    local pid="$1"
+    [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1
+}
+
+is_colima_running() {
+    colima status 2>/dev/null | grep -qi "is running"
+}
+
+docker_is_ready() {
+    docker info >/dev/null 2>&1
+}
+
+container_exists() {
+    docker container inspect "$1" >/dev/null 2>&1
+}
+
+container_is_running() {
+    [[ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null || true)" == "true" ]]
+}
+
+get_container_status() {
+    docker inspect -f '{{.State.Status}}' "$1" 2>/dev/null || true
+}
+
+require_file() {
+    [[ -f "$1" ]] || die "Required file not found: $1"
+}
+
+check_port_open() {
+    local host="$1"
+    local port="$2"
+
+    if command_exists nc; then
+        nc -z "${host}" "${port}" >/dev/null 2>&1
+        return $?
+    fi
+
+    return 1
+}
+
+check_port_available() {
+    local port="$1"
+
+    if command_exists lsof; then
+        ! lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
+        return $?
+    fi
+
+    return 0
+}
+
+wait_for_docker() {
+    local attempts=30
+    local count=0
+
+    while ! docker_is_ready; do
+        count=$((count + 1))
+        if (( count >= attempts )); then
+            return 1
+        fi
+        sleep 2
+    done
+}
+
+ensure_docker_ready() {
+    if docker_is_ready; then
+        return 0
+    fi
+
+    if ! command_exists colima; then
+        die "Docker is unavailable and colima is not installed."
+    fi
+
+    if ! is_colima_running; then
+        say "Starting Colima with ${COLIMA_MEMORY_GB} GiB memory and ${COLIMA_CPU} CPU(s)..."
+        colima start --memory "${COLIMA_MEMORY_GB}" --cpu "${COLIMA_CPU}"
+    fi
+
+    wait_for_docker || die "Docker did not become ready after starting Colima."
+}
+
+print_usage() {
+    cat <<'EOF'
+Usage: scripts/local-stack <command>
+
+Commands:
+  bootstrap    Create local state directories and validate prerequisites
+  check        Validate required tools and local prerequisites
+  up           Start Colima if needed, then start VictoriaLogs, RocketMQ, and Fluent Bit
+  down         Stop Fluent Bit and remove managed containers/network
+  restart      Run down, then up
+  status       Show Colima, Docker, container, and Fluent Bit status
+  logs <svc>   Tail logs for one of: namesrv, broker, victorialogs, fluent-bit, app, app-error
+EOF
+}
+
+check_required_tools() {
+    local missing=0
+    local tool
+
+    for tool in colima docker fluent-bit java mvn; do
+        if command_exists "${tool}"; then
+            say "OK: found ${tool}"
+        else
+            warn "missing required tool: ${tool}"
+            missing=1
+        fi
+    done
+
+    return "${missing}"
+}
+
+check_prerequisites() {
+    local failures=0
+
+    ensure_state_dirs
+    require_file "${BROKER_CONF}"
+    require_file "${FLUENT_BIT_CONF}"
+
+    if ! check_required_tools; then
+        failures=1
+    fi
+
+    if is_colima_running; then
+        say "OK: Colima is running"
+    else
+        warn "Colima is not running. 'scripts/local-stack up' will try to start it."
+        failures=1
+    fi
+
+    if docker_is_ready; then
+        say "OK: Docker daemon is reachable"
+    else
+        warn "Docker daemon is not reachable through the current context."
+        failures=1
+    fi
+
+    if [[ -f "${ROOT_DIR}/log/data.log" ]]; then
+        say "OK: ${ROOT_DIR}/log/data.log exists for Fluent Bit to tail"
+    else
+        warn "${ROOT_DIR}/log/data.log does not exist yet. Fluent Bit can start, but no BAMS logs will flow until the app runs."
+    fi
+
+    if check_port_open "${MYSQL_HOST}" "${MYSQL_PORT}"; then
+        say "OK: MySQL is reachable at ${MYSQL_HOST}:${MYSQL_PORT}"
+    else
+        warn "MySQL is not reachable at ${MYSQL_HOST}:${MYSQL_PORT}. This does not block the infra stack, but BAMS will need it."
+    fi
+
+    return "${failures}"
+}
+
+remove_container_if_present() {
+    local name="$1"
+    if container_exists "${name}"; then
+        say "Removing existing container ${name}"
+        docker rm -f "${name}" >/dev/null
+    fi
+}
+
+ensure_network() {
+    if docker network inspect "${NETWORK_NAME}" >/dev/null 2>&1; then
+        say "OK: Docker network ${NETWORK_NAME} already exists"
+    else
+        say "Creating Docker network ${NETWORK_NAME}"
+        docker network create "${NETWORK_NAME}" >/dev/null
+    fi
+}
+
+ensure_host_port_available() {
+    local port="$1"
+    local service_name="$2"
+
+    if ! check_port_available "${port}"; then
+        die "${service_name} needs localhost:${port}, but that port is already in use. Stop the conflicting process or change the local stack port mapping before retrying."
+    fi
+}
+
+ensure_required_ports_available() {
+    ensure_host_port_available "${VICTORIALOGS_PORT}" "VictoriaLogs"
+    ensure_host_port_available "9876" "RocketMQ name server"
+    ensure_host_port_available "10911" "RocketMQ broker"
+}
+
+start_victorialogs() {
+    remove_container_if_present "${VICTORIALOGS_CONTAINER}"
+    ensure_host_port_available "${VICTORIALOGS_PORT}" "VictoriaLogs"
+
+    say "Starting VictoriaLogs on ${VICTORIALOGS_HOST}:${VICTORIALOGS_PORT}"
+    docker run -d \
+        --name "${VICTORIALOGS_CONTAINER}" \
+        --network "${NETWORK_NAME}" \
+        -p "${VICTORIALOGS_HOST}:${VICTORIALOGS_PORT}:9428" \
+        "${VICTORIALOGS_IMAGE}" >/dev/null
+}
+
+start_rocketmq_namesrv() {
+    remove_container_if_present "${ROCKETMQ_NAMESRV_CONTAINER}"
+    ensure_host_port_available "9876" "RocketMQ name server"
+
+    say "Starting RocketMQ name server on 127.0.0.1:9876"
+    docker run -d \
+        --name "${ROCKETMQ_NAMESRV_CONTAINER}" \
+        --network "${NETWORK_NAME}" \
+        --network-alias rmqnamesrv \
+        -p 127.0.0.1:9876:9876 \
+        "${ROCKETMQ_IMAGE}" \
+        sh mqnamesrv >/dev/null
+}
+
+start_rocketmq_broker() {
+    remove_container_if_present "${ROCKETMQ_BROKER_CONTAINER}"
+    ensure_host_port_available "10911" "RocketMQ broker"
+
+    say "Starting RocketMQ broker on 127.0.0.1:10911"
+    docker run -d \
+        --name "${ROCKETMQ_BROKER_CONTAINER}" \
+        --network "${NETWORK_NAME}" \
+        -p 127.0.0.1:10911:10911 \
+        -v "${BROKER_CONF}:/home/rocketmq/broker.conf:ro" \
+        "${ROCKETMQ_IMAGE}" \
+        sh mqbroker -c /home/rocketmq/broker.conf >/dev/null
+}
+
+stop_fluent_bit() {
+    if [[ -f "${FLUENT_BIT_PID_FILE}" ]]; then
+        local pid
+        pid="$(cat "${FLUENT_BIT_PID_FILE}")"
+        if is_pid_running "${pid}"; then
+            say "Stopping Fluent Bit (pid ${pid})"
+            kill "${pid}" >/dev/null 2>&1 || true
+            wait "${pid}" 2>/dev/null || true
+        fi
+        rm -f "${FLUENT_BIT_PID_FILE}"
+    fi
+}
+
+start_fluent_bit() {
+    stop_fluent_bit
+    ensure_state_dirs
+    : > "${FLUENT_BIT_LOG_FILE}"
+
+    export VICTORIALOGS_HOST
+    export VICTORIALOGS_PORT
+
+    if [[ ! -f "${ROOT_DIR}/log/data.log" ]]; then
+        warn "${ROOT_DIR}/log/data.log does not exist yet. Fluent Bit will wait for the file after BAMS starts writing logs."
+    fi
+
+    say "Starting Fluent Bit with VICTORIALOGS_HOST=${VICTORIALOGS_HOST} and VICTORIALOGS_PORT=${VICTORIALOGS_PORT}"
+    (
+        cd "${FLUENT_BIT_DIR}"
+        exec fluent-bit -c "${FLUENT_BIT_CONF}"
+    ) >>"${FLUENT_BIT_LOG_FILE}" 2>&1 &
+    echo "$!" > "${FLUENT_BIT_PID_FILE}"
+}
+
+cmd_bootstrap() {
+    ensure_state_dirs
+    if check_prerequisites; then
+        say "Bootstrap complete."
+    else
+        die "Bootstrap validation failed."
+    fi
+}
+
+cmd_check() {
+    if check_prerequisites; then
+        say "Prerequisite check passed."
+    else
+        die "Prerequisite check failed."
+    fi
+}
+
+cmd_up() {
+    ensure_state_dirs
+    require_file "${BROKER_CONF}"
+    require_file "${FLUENT_BIT_CONF}"
+    ensure_docker_ready
+    remove_container_if_present "${ROCKETMQ_BROKER_CONTAINER}"
+    remove_container_if_present "${ROCKETMQ_NAMESRV_CONTAINER}"
+    remove_container_if_present "${VICTORIALOGS_CONTAINER}"
+    ensure_required_ports_available
+    ensure_network
+    start_victorialogs
+    start_rocketmq_namesrv
+    sleep 2
+    start_rocketmq_broker
+    start_fluent_bit
+    say "Local infra stack is up."
+}
+
+cmd_down() {
+    stop_fluent_bit
+
+    if command_exists docker && docker_is_ready; then
+        remove_container_if_present "${ROCKETMQ_BROKER_CONTAINER}"
+        remove_container_if_present "${ROCKETMQ_NAMESRV_CONTAINER}"
+        remove_container_if_present "${VICTORIALOGS_CONTAINER}"
+
+        if docker network inspect "${NETWORK_NAME}" >/dev/null 2>&1; then
+            say "Removing Docker network ${NETWORK_NAME}"
+            docker network rm "${NETWORK_NAME}" >/dev/null || warn "Failed to remove ${NETWORK_NAME}; other containers may still be attached."
+        fi
+    else
+        warn "Docker is not reachable; skipped container and network cleanup."
+    fi
+
+    say "Local infra stack is down."
+}
+
+cmd_restart() {
+    cmd_down
+    cmd_up
+}
+
+print_container_status() {
+    local name="$1"
+    if ! command_exists docker; then
+        say "Docker unavailable: ${name} status not checked"
+        return
+    fi
+
+    if ! docker_is_ready; then
+        say "Docker not reachable: ${name} status not checked"
+        return
+    fi
+
+    if container_exists "${name}"; then
+        say "${name}: $(get_container_status "${name}")"
+    else
+        say "${name}: not created"
+    fi
+}
+
+cmd_status() {
+    if command_exists colima; then
+        if is_colima_running; then
+            say "Colima: running"
+        else
+            say "Colima: stopped"
+        fi
+    else
+        say "Colima: not installed"
+    fi
+
+    if command_exists docker; then
+        if docker_is_ready; then
+            say "Docker: reachable"
+        else
+            say "Docker: not reachable"
+        fi
+    else
+        say "Docker: not installed"
+    fi
+
+    print_container_status "${VICTORIALOGS_CONTAINER}"
+    print_container_status "${ROCKETMQ_NAMESRV_CONTAINER}"
+    print_container_status "${ROCKETMQ_BROKER_CONTAINER}"
+
+    if [[ -f "${FLUENT_BIT_PID_FILE}" ]] && is_pid_running "$(cat "${FLUENT_BIT_PID_FILE}")"; then
+        say "fluent-bit: running (pid $(cat "${FLUENT_BIT_PID_FILE}"))"
+        say "fluent-bit log: ${FLUENT_BIT_LOG_FILE}"
+    else
+        say "fluent-bit: stopped"
+    fi
+}
+
+cmd_logs() {
+    local service="${1:-}"
+    case "${service}" in
+        namesrv)
+            ensure_docker_ready
+            exec docker logs -f "${ROCKETMQ_NAMESRV_CONTAINER}"
+            ;;
+        broker)
+            ensure_docker_ready
+            exec docker logs -f "${ROCKETMQ_BROKER_CONTAINER}"
+            ;;
+        victorialogs)
+            ensure_docker_ready
+            exec docker logs -f "${VICTORIALOGS_CONTAINER}"
+            ;;
+        fluent-bit)
+            ensure_state_dirs
+            touch "${FLUENT_BIT_LOG_FILE}"
+            exec tail -f "${FLUENT_BIT_LOG_FILE}"
+            ;;
+        app)
+            mkdir -p "$(dirname "${APP_DATA_LOG_FILE}")"
+            touch "${APP_DATA_LOG_FILE}"
+            exec tail -f "${APP_DATA_LOG_FILE}"
+            ;;
+        app-error)
+            mkdir -p "$(dirname "${APP_ERROR_LOG_FILE}")"
+            touch "${APP_ERROR_LOG_FILE}"
+            exec tail -f "${APP_ERROR_LOG_FILE}"
+            ;;
+        *)
+            die "Unknown service '${service}'. Expected one of: namesrv, broker, victorialogs, fluent-bit, app, app-error."
+            ;;
+    esac
+}
+
+main() {
+    local command="${1:-}"
+
+    case "${command}" in
+        bootstrap)
+            cmd_bootstrap
+            ;;
+        check)
+            cmd_check
+            ;;
+        up)
+            cmd_up
+            ;;
+        down)
+            cmd_down
+            ;;
+        restart)
+            cmd_restart
+            ;;
+        status)
+            cmd_status
+            ;;
+        logs)
+            shift || true
+            cmd_logs "${1:-}"
+            ;;
+        ""|-h|--help|help)
+            print_usage
+            ;;
+        *)
+            die "Unknown command '${command}'. Run 'scripts/local-stack --help' for usage."
+            ;;
+    esac
+}
+
+main "$@"

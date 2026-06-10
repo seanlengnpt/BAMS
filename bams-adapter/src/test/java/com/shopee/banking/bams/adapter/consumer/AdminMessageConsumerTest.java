@@ -4,12 +4,17 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@ExtendWith(OutputCaptureExtension.class)
 class AdminMessageConsumerTest {
 
     private AdminMessageConsumer adminMessageConsumer;
@@ -21,18 +26,20 @@ class AdminMessageConsumerTest {
 
     @Test
     @DisplayName("onMessage handles valid payload without throwing")
-    void onMessage_validPayload_doesNotThrow() {
+    void onMessage_validPayload_logsConsumedMessage(CapturedOutput output) {
         MessageExt messageExt = buildMessage("{\"adminId\":1,\"eventId\":\"event-1\"}");
 
         assertDoesNotThrow(() -> adminMessageConsumer.onMessage(messageExt));
+        assertTrue(output.getAll().contains("Consumed admin message. topic=bams-admin-message-topic, msgId=msg-1, adminId=1, eventId=event-1"));
     }
 
     @Test
     @DisplayName("onMessage swallows invalid payload errors")
-    void onMessage_invalidPayload_doesNotThrow() {
+    void onMessage_invalidPayload_logsErrorWithoutThrowing(CapturedOutput output) {
         MessageExt messageExt = buildMessage("not-json");
 
         assertDoesNotThrow(() -> adminMessageConsumer.onMessage(messageExt));
+        assertTrue(output.getAll().contains("Failed to consume RocketMQ message. topic=bams-admin-message-topic, msgId=msg-1, payload=not-json"));
     }
 
     private MessageExt buildMessage(String payload) {
